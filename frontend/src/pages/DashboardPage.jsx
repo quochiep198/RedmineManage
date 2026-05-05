@@ -45,13 +45,13 @@ export default function DashboardPage({ user, onLogout }) {
           >
             Dashboard
           </button>
-          <button
+          {/* <button
             className={`nav-link ${view === "projects" ? "active" : ""}`}
             type="button"
             onClick={() => setView("projects")}
           >
             Current Project
-          </button>
+          </button> */}
           <button
             className={`nav-link ${view === "issues" ? "active" : ""}`}
             type="button"
@@ -87,7 +87,7 @@ export default function DashboardPage({ user, onLogout }) {
                     : "Dashboard"}
             </h1>
             <p>
-              Xin chao, {user.username}
+             Hello, {user.username}
               {user.is_admin ? " (admin)" : ""}
             </p>
           </div>

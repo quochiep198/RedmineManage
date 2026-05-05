@@ -184,12 +184,6 @@ export default function DashboardSummaryPage({ dbStatus }) {
             {syncing ? "Syncing..." : "Sync Issues"}
           </button>
         </div>
-
-        <p className="muted-copy">
-          Dashboard reads only from local synced data and filters by
-          {" "}
-          <strong>{data?.date_range?.field ?? "redmine_updated_on"}</strong>.
-        </p>
       </section>
 
       {error ? <div className="error-msg">{error}</div> : null}
