@@ -710,6 +710,21 @@ select {
   color: #991b1b;
 }
 
+.health-badge.green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.health-badge.yellow {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.health-badge.red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .dashboard-warning-list {
   margin-top: 22px;
   display: grid;
@@ -743,6 +758,89 @@ select {
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.warning-tag.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.warning-tag.critical {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.dashboard-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.health-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-breakdown {
+  margin-top: 24px;
+}
+
+.section-heading.compact {
+  margin-bottom: 12px;
+}
+
+.metric-list {
+  display: grid;
+  gap: 12px;
+}
+
+.metric-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  background: #fff;
+}
+
+.metric-row p {
+  margin: 6px 0 0;
+  color: #64748b;
+}
+
+.metric-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.metric-score {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.dashboard-note {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .dashboard-chart-panel {
@@ -901,7 +999,8 @@ select {
 
   .dashboard-filter-grid,
   .dashboard-chart-grid,
-  .dashboard-health-grid {
+  .dashboard-health-grid,
+  .dashboard-two-col {
     grid-template-columns: 1fr;
   }
 

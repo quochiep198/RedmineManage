@@ -12,6 +12,7 @@ export default function DashboardPage({ user, onLogout }) {
   const [dbStatus, setDbStatus] = useState("checking...");
   const [view, setView] = useState("dashboard");
   const [settingsTab, setSettingsTab] = useState("connection");
+  const [issuePreset, setIssuePreset] = useState(null);
 
   useEffect(() => {
     api
@@ -32,6 +33,11 @@ export default function DashboardPage({ user, onLogout }) {
   const showSettings = user.is_admin && view === "settings";
   const showProjects = view === "projects";
   const showIssues = view === "issues";
+
+  function openIssuesWithPreset(preset) {
+    setIssuePreset(preset);
+    setView("issues");
+  }
 
   return (
     <div className="app-shell">
@@ -132,9 +138,9 @@ export default function DashboardPage({ user, onLogout }) {
         ) : showProjects ? (
           <ProjectsPage />
         ) : showIssues ? (
-          <IssuesPage />
+          <IssuesPage initialPreset={issuePreset} onClearPreset={() => setIssuePreset(null)} />
         ) : (
-          <DashboardSummaryPage dbStatus={dbStatus} />
+          <DashboardSummaryPage dbStatus={dbStatus} onOpenIssues={openIssuesWithPreset} />
         )}
       </main>
     </div>

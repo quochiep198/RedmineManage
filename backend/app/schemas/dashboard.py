@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -15,60 +16,73 @@ class DashboardDateRange(BaseModel):
     field: str
 
 
-class DashboardStatusItem(BaseModel):
-    status_id: int | None
-    status_name: str
-    count: int
+class DashboardHealthSummary(BaseModel):
+    score: float
+    max_score: int
+    status: str
+    trend_value: float | None
+    trend_direction: str
 
 
-class DashboardPriorityItem(BaseModel):
-    priority_id: int | None
-    priority_name: str
-    count: int
-
-
-class DashboardAssigneeItem(BaseModel):
-    assignee_id: int | None
-    assignee_name: str
-    count: int
-
-
-class DashboardTrendItem(BaseModel):
-    bucket: str
+class DashboardMetricItem(BaseModel):
+    code: str
     label: str
-    total_issues: int
-    open_issues: int
-    closed_issues: int
+    score: int
+    max_score: int
+    value: float | None
+    value_display: str
+    benchmark: str
+    drilldown_risk_type: str | None
+    details: dict[str, Any]
 
 
-class DashboardHealthWarning(BaseModel):
-    redmine_issue_id: int
-    subject: str
-    priority_id: int | None
-    priority_name: str | None
-    status_id: int | None
-    status_name: str | None
-    due_date: date | None
-    warning_type: str
+class DashboardRiskDriverItem(BaseModel):
+    risk_type: str
+    label: str
+    issue_count: int
+    issue_ratio: float | None
+    dimension: str
+    dimension_value: str | None
+    drilldown_risk_type: str | None
+    drilldown_dimension: str | None
+    drilldown_value: str | None
 
 
-class DashboardProjectHealth(BaseModel):
-    health_status: str
-    completed_early_count: int
-    at_risk_task_count: int
-    high_priority_alert_count: int
-    health_warnings: list[DashboardHealthWarning]
+class DashboardSuggestedActionItem(BaseModel):
+    risk_type: str
+    message: str
+    drilldown_risk_type: str | None = None
+    drilldown_dimension: str | None = None
+    drilldown_value: str | None = None
+
+
+class DashboardEarlyWarningItem(BaseModel):
+    code: str
+    level: str
+    message: str
+    drilldown_risk_type: str | None = None
+
+
+class DashboardHealthTrendItem(BaseModel):
+    snapshot_at: datetime
+    label: str
+    score: float
+    status: str
+    trend_value: float | None
+    trend_direction: str
 
 
 class DashboardSummaryResponse(BaseModel):
     project: DashboardProjectSummary | None
     date_range: DashboardDateRange
+    last_updated: datetime | None
     total_issues: int
     open_issues: int
     closed_issues: int
     overdue_issues: int
-    project_health: DashboardProjectHealth
-    by_status: list[DashboardStatusItem]
-    by_priority: list[DashboardPriorityItem]
-    by_assignee: list[DashboardAssigneeItem]
-    trend: list[DashboardTrendItem]
+    health_summary: DashboardHealthSummary
+    metrics: list[DashboardMetricItem]
+    main_risk_drivers: list[DashboardRiskDriverItem]
+    suggested_actions: list[DashboardSuggestedActionItem]
+    early_warnings: list[DashboardEarlyWarningItem]
+    health_trend: list[DashboardHealthTrendItem]

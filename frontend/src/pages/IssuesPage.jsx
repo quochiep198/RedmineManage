@@ -23,6 +23,18 @@ function buildParams(filters, page, pageSize) {
   if (filters.assignee_id) {
     params.assignee_id = Number(filters.assignee_id);
   }
+  if (filters.assignee_name.trim()) {
+    params.assignee_name = filters.assignee_name.trim();
+  }
+  if (filters.tracker_name.trim()) {
+    params.tracker_name = filters.tracker_name.trim();
+  }
+  if (filters.subject_group.trim()) {
+    params.subject_group = filters.subject_group.trim();
+  }
+  if (filters.risk_type) {
+    params.risk_type = filters.risk_type;
+  }
   if (filters.keyword.trim()) {
     params.keyword = filters.keyword.trim();
   }
@@ -39,17 +51,32 @@ const emptyFilters = {
   status_id: "",
   priority_id: "",
   assignee_id: "",
+  assignee_name: "",
+  tracker_name: "",
+  subject_group: "",
+  risk_type: "",
   keyword: "",
   due_date_from: "",
   due_date_to: "",
 };
 
-export default function IssuesPage() {
+function presetToFilters(preset) {
+  if (!preset) {
+    return emptyFilters;
+  }
+  return {
+    ...emptyFilters,
+    ...preset.filters,
+  };
+}
+
+export default function IssuesPage({ initialPreset, onClearPreset }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [options, setOptions] = useState({ statuses: [], priorities: [] });
   const [result, setResult] = useState({ items: [], page: 1, page_size: 20, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activePresetTitle, setActivePresetTitle] = useState("");
 
   useEffect(() => {
     async function loadOptions() {
@@ -63,6 +90,15 @@ export default function IssuesPage() {
 
     loadOptions();
   }, []);
+
+  useEffect(() => {
+    if (!initialPreset) {
+      return;
+    }
+    setFilters(presetToFilters(initialPreset));
+    setResult((current) => ({ ...current, page: 1 }));
+    setActivePresetTitle(initialPreset.title || "Risk drill-down");
+  }, [initialPreset]);
 
   useEffect(() => {
     async function loadIssues() {
@@ -91,7 +127,9 @@ export default function IssuesPage() {
 
   function resetFilters() {
     setFilters(emptyFilters);
+    setActivePresetTitle("");
     setResult((current) => ({ ...current, page: 1 }));
+    onClearPreset?.();
   }
 
   const totalPages = Math.max(1, Math.ceil(result.total / result.page_size));
@@ -105,6 +143,12 @@ export default function IssuesPage() {
         </div>
       </div>
 
+      {activePresetTitle ? (
+        <div className="dashboard-note">
+          <strong>Drill-down:</strong> {activePresetTitle}
+        </div>
+      ) : null}
+
       <div className="issues-filter-grid">
         <label className="field-label">
           Keyword
@@ -116,7 +160,18 @@ export default function IssuesPage() {
           />
         </label>
         <label className="field-label">
-          Status ID
+          Risk type
+          <select name="risk_type" value={filters.risk_type} onChange={handleFilterChange}>
+            <option value="">All risks</option>
+            <option value="overdue">Overdue</option>
+            <option value="bug">Bug</option>
+            <option value="effort">Effort</option>
+            <option value="stale">Stale</option>
+            <option value="progress">Progress</option>
+          </select>
+        </label>
+        <label className="field-label">
+          Status
           <select name="status_id" value={filters.status_id} onChange={handleFilterChange}>
             <option value="">All statuses</option>
             {options.statuses.map((status) => (
@@ -127,7 +182,7 @@ export default function IssuesPage() {
           </select>
         </label>
         <label className="field-label">
-          Priority ID
+          Priority
           <select name="priority_id" value={filters.priority_id} onChange={handleFilterChange}>
             <option value="">All priorities</option>
             {options.priorities.map((priority) => (
@@ -144,6 +199,33 @@ export default function IssuesPage() {
             value={filters.assignee_id}
             onChange={handleFilterChange}
             placeholder="12"
+          />
+        </label>
+        <label className="field-label">
+          Assignee name
+          <input
+            name="assignee_name"
+            value={filters.assignee_name}
+            onChange={handleFilterChange}
+            placeholder="A"
+          />
+        </label>
+        <label className="field-label">
+          Tracker name
+          <input
+            name="tracker_name"
+            value={filters.tracker_name}
+            onChange={handleFilterChange}
+            placeholder="Bug"
+          />
+        </label>
+        <label className="field-label">
+          Subject group
+          <input
+            name="subject_group"
+            value={filters.subject_group}
+            onChange={handleFilterChange}
+            placeholder="Payment"
           />
         </label>
         <label className="field-label">
@@ -180,6 +262,7 @@ export default function IssuesPage() {
                   <th>Status</th>
                   <th>Priority</th>
                   <th>Assignee</th>
+                  <th>Tracker</th>
                   <th>Due Date</th>
                   <th>Done</th>
                   <th>Redmine</th>
@@ -198,6 +281,7 @@ export default function IssuesPage() {
                     <td>{issue.status_name || "-"}</td>
                     <td>{issue.priority_name || "-"}</td>
                     <td>{issue.assignee_name || "-"}</td>
+                    <td>{issue.tracker_name || "-"}</td>
                     <td>{formatDate(issue.due_date)}</td>
                     <td>{issue.done_ratio ?? 0}%</td>
                     <td>
@@ -235,8 +319,8 @@ export default function IssuesPage() {
         </>
       ) : (
         <div className="empty-state">
-          <h3>No issues synced yet</h3>
-          <p>Run Issue Sync from Settings after the current project has been synced.</p>
+          <h3>No issues found</h3>
+          <p>Try resetting filters or sync the current project issues first.</p>
         </div>
       )}
     </section>

@@ -6,6 +6,8 @@ from sqlalchemy import inspect, select, text
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import AsyncSessionLocal, engine
+from app.models.dashboard_health_config import DashboardHealthConfig
+from app.models.dashboard_health_snapshot import DashboardHealthSnapshot
 from app.models.issue import Issue
 from app.models.issue_sync_log import IssueSyncLog
 from app.models.project import Project
@@ -13,6 +15,7 @@ from app.models.project_sync_log import ProjectSyncLog
 from app.models.redmine_connection import RedmineConnection
 from app.models.user import User
 from app.routes import auth, dashboard, health, issues, projects, redmine_connections
+from app.services.dashboard_health import ensure_default_health_config
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -70,6 +73,7 @@ async def startup():
             )
 
     async with AsyncSessionLocal() as session:
+        await ensure_default_health_config(session)
         result = await session.execute(select(User).where(User.username == "admin"))
         admin_user = result.scalar_one_or_none()
         if admin_user is None:

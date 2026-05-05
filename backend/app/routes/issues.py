@@ -23,6 +23,7 @@ from app.schemas.issue import (
     IssueSyncStatusResponse,
 )
 from app.services.redmine_client import build_redmine_issue_url, fetch_redmine_issues
+from app.services.dashboard_health import get_health_config, persist_health_snapshot
 
 router = APIRouter()
 
@@ -398,6 +399,7 @@ async def perform_issue_sync():
         created_count=created_count,
         updated_count=updated_count,
     )
+    await persist_health_snapshot(connection.id, project.id)
 
     return {
         "success": True,
@@ -415,6 +417,10 @@ async def list_issues(
     status_id: int | None = Query(default=None),
     priority_id: int | None = Query(default=None),
     assignee_id: int | None = Query(default=None),
+    assignee_name: str | None = Query(default=None),
+    tracker_name: str | None = Query(default=None),
+    subject_group: str | None = Query(default=None),
+    risk_type: str | None = Query(default=None),
     keyword: str | None = Query(default=None),
     due_date_from: date | None = Query(default=None),
     due_date_to: date | None = Query(default=None),
@@ -436,6 +442,17 @@ async def list_issues(
             Issue.connection_id == connection.id,
             Issue.project_id == project.id,
         )
+        health_config = await get_health_config(session)
+        today = datetime.now(timezone.utc).date()
+        stale_days = int((health_config.metric_thresholds_json or {}).get("stale_days") or 7)
+        effort_yellow_max = float(
+            ((health_config.metric_thresholds_json or {}).get("effort_ratio") or {}).get("yellow_max") or 120.0
+        )
+        bug_tracker_names = {
+            item.strip().lower()
+            for item in (health_config.bug_tracker_names_json or [])
+            if item and item.strip()
+        }
 
         if status_id is not None:
             stmt = stmt.where(Issue.status_id == status_id)
@@ -443,6 +460,12 @@ async def list_issues(
             stmt = stmt.where(Issue.priority_id == priority_id)
         if assignee_id is not None:
             stmt = stmt.where(Issue.assignee_id == assignee_id)
+        if assignee_name:
+            stmt = stmt.where(Issue.assignee_name == assignee_name)
+        if tracker_name:
+            stmt = stmt.where(Issue.tracker_name == tracker_name)
+        if subject_group:
+            stmt = stmt.where(Issue.subject == subject_group)
         if keyword:
             like_value = f"%{keyword.strip()}%"
             stmt = stmt.where(
@@ -455,6 +478,33 @@ async def list_issues(
             stmt = stmt.where(Issue.due_date >= due_date_from)
         if due_date_to is not None:
             stmt = stmt.where(Issue.due_date <= due_date_to)
+        if risk_type == "overdue":
+            stmt = stmt.where(
+                Issue.is_closed.is_(False),
+                Issue.due_date.is_not(None),
+                Issue.due_date < today,
+            )
+        elif risk_type == "bug":
+            stmt = stmt.where(
+                Issue.is_closed.is_(False),
+                func.lower(Issue.tracker_name).in_(bug_tracker_names),
+            )
+        elif risk_type == "effort":
+            stmt = stmt.where(
+                Issue.estimated_hours.is_not(None),
+                Issue.estimated_hours > 0,
+                Issue.spent_hours.is_not(None),
+                ((Issue.spent_hours * 100.0) / Issue.estimated_hours) > effort_yellow_max,
+            )
+        elif risk_type == "stale":
+            stale_cutoff = today - date.resolution * stale_days
+            stmt = stmt.where(
+                Issue.is_closed.is_(False),
+                Issue.redmine_updated_on.is_not(None),
+                Issue.redmine_updated_on < datetime.combine(stale_cutoff, datetime.min.time()),
+            )
+        elif risk_type == "progress":
+            stmt = stmt.where(Issue.is_closed.is_(False))
 
         count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
         total = await session.scalar(count_stmt)
