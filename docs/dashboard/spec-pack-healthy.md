@@ -32,7 +32,7 @@ Redmine không có sẵn một chỉ số chuẩn gọi là “Project Health”
 - Phát hiện cảnh báo sớm dựa trên rule.
 - Đề xuất hành động cụ thể dựa trên risk driver.
 - Cho phép cấu hình threshold, weight, closed status và bug tracker.
-- Hiển thị dashboard drill-down issue rủi ro.
+- Hiển thị dashboard nhiều dự án và drill-down issue rủi ro.
 
 ### Ngoài phạm vi
 
@@ -40,7 +40,7 @@ Redmine không có sẵn một chỉ số chuẩn gọi là “Project Health”
 - Tự động assign/reassign issue trên Redmine.
 - Thay thế quyết định của PM / BrSE / Leader.
 - Dự đoán chính xác ngày hoàn thành dự án bằng AI/ML nâng cao.
-- Tích hợp trực tiếp API Redmine ở giai đoạn đầu nếu MVP chỉ dùng import CSV/Excel.
+- Tích hợp trực tiếp API Redmine ở giai đoạn đầu nếu MVP chỉ dùng sử dụng dữ liệu đã được đồng bộ từ Redmine về DB local.
 
 ## 3. Thuật ngữ
 
@@ -74,7 +74,7 @@ Redmine không có sẵn một chỉ số chuẩn gọi là “Project Health”
 
 ### 5.1. Dữ liệu đầu vào
 
-Có thể lấy dữ liệu bằng cách export issue từ Redmine ra CSV hoặc Excel.
+Dữ liệu issue được đồng bộ định kỳ từ Redmine về DB local và sử dụng trực tiếp từ DB.
 
 | Nhóm dữ liệu | Trường Redmine |
 |---|---|
@@ -480,7 +480,7 @@ Project C: 5/12  Red    Trend -1  Main risk: Bug Rate
 
 | #   | Danh mục          | Yêu cầu |
 | --- | ----------------- | ------- |
-| 1   | Hiệu năng         | Import và tính toán tối thiểu 5.000 issue trong vòng 10 giây đối với file CSV/Excel thông thường |
+| 1   | Hiệu năng         | Tính toán trên dữ liệu DB local tối thiểu 5.000 issue trong vòng 10 giây đối với file CSV/Excel thông thường |
 | 2   | Bảo mật           | Không lưu mật khẩu Redmine; nếu tích hợp API thì token phải được mã hóa hoặc lưu bằng cơ chế bảo mật của hệ thống |
 | 3   | Tính sẵn sàng     | Nếu import file lỗi, hệ thống phải hiển thị thông báo lỗi rõ ràng và không làm mất dữ liệu snapshot cũ |
 | 4   | Khả năng quan sát | Theo dõi theo tuần để thấy xu hướng; lưu log import, thời điểm tính score và lỗi validate dữ liệu |
@@ -507,14 +507,14 @@ Project C: 5/12  Red    Trend -1  Main risk: Bug Rate
 | 14  | HEALTH-AC-014/v1 | Phát hiện được cảnh báo sớm theo các rule đã định nghĩa | Unit test |
 | 15  | HEALTH-AC-015/v1 | Sinh được Suggested Actions dựa trên loại rủi ro phát hiện được | Unit / UI test |
 | 16  | HEALTH-AC-016/v1 | Cho phép cấu hình closed status, bug tracker, threshold và metric weight | UI / Integration test |
-| 17  | HEALTH-AC-017/v1 | Hiển thị được dashboard  health, trend, main risk và last updated | UI test |
+| 17  | HEALTH-AC-017/v1 | Hiển thị được dashboard nhiều dự án với health, trend, main risk và last updated | UI test |
 | 18  | HEALTH-AC-018/v1 | Cho phép drill-down từ metric rủi ro đến danh sách issue liên quan | UI / Integration test |
 
 ## 8. Ví dụ
 
 ### Các luồng bình thường
 
-1. Export issue từ Redmine ra CSV hoặc Excel.
+1. Dữ liệu issue đã được đồng bộ từ Redmine về DB local.
 2. Tính các chỉ số: Progress, Closed Rate, Overdue, Bug, Effort, Stale Issue.
 3. Cộng điểm các chỉ số để tính Project Health Score.
 4. Phân loại Project Health theo Green / Yellow / Red.
@@ -634,7 +634,7 @@ Dự án chưa đến mức nguy hiểm, nhưng có nhiều dấu hiệu cần t
 | #    | Câu hỏi | Người phụ trách | Hạn chót |
 | ---- | ------- | --------------- | -------- |
 | OI-1 | Chưa có thông tin ticket ID, ngày tạo và giai đoạn | [MISSING] | [MISSING] |
-| OI-2 | Có cần tích hợp trực tiếp Redmine API ở MVP hay chỉ import CSV/Excel? | PM / Dev Lead | [MISSING] |
+| OI-2 | Có cần tích hợp trực tiếp Redmine API ở MVP hay chỉ sử dụng dữ liệu đã được đồng bộ từ Redmine về DB local? | PM / Dev Lead | [MISSING] |
 | OI-3 | Danh sách status nào được xem là closed ngoài `status_id = 3`? | PM / Redmine Admin | [MISSING] |
 | OI-4 | Ngưỡng Green/Yellow/Red và weight metric có dùng mặc định hay theo từng project? | PM / BrSE / Leader | [MISSING] |
 | OI-5 | Có cần phân tích theo module không, nếu có module được lấy từ field nào trong Redmine? | PM / Dev Lead | [MISSING] |
@@ -659,7 +659,7 @@ Dự án chưa đến mức nguy hiểm, nhưng có nhiều dấu hiệu cần t
 
 | #   | AC                | Màn hình/API | DB | Logs | Quyền | Loại kiểm thử |
 | --- | ----------------- | ------------ | --- | ---- | ----- | ------------- |
-| 1   | HEALTH-AC-001/v1 | Import / Calculation API | Không bắt buộc nếu MVP dùng file; cần DB nếu lưu snapshot | Import log | Viewer | Unit test |
+| 1   | HEALTH-AC-001/v1 | Sync DB / Calculation API | Không bắt buộc nếu MVP dùng file; cần DB nếu lưu snapshot | Import log | Viewer | Unit test |
 | 2   | HEALTH-AC-002/v1 | Calculation API | Không bắt buộc | Calculation log | Viewer | Unit test |
 | 3   | HEALTH-AC-003/v1 | Calculation API | Không bắt buộc | Calculation log | Viewer | Unit test |
 | 4   | HEALTH-AC-004/v1 | Calculation API / Drill-down | Không bắt buộc | Calculation log | Viewer | Unit test |
