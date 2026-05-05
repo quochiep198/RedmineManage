@@ -157,15 +157,16 @@ async def get_dashboard_summary(
                     at_risk_task_count += 1
 
             warning_type: str | None = None
-            if is_high_priority and not is_closed:
-                if not is_in_progress:
+            if is_high_priority and (issue.status_id != 3 and issue.status_id != 4):
+                if not is_in_progress :
                     high_priority_alert_count += 1
-                    warning_type = "high_priority_not_in_progress"
+                    warning_type = "high_priority_but_status_not_in_progress"
                 elif is_overdue:
                     high_priority_alert_count += 1
                     warning_type = "high_priority_late"
-            elif not is_closed and is_overdue:
-                warning_type = "overdue"
+                elif not is_closed and is_overdue:
+                    high_priority_alert_count += 1
+                    warning_type = "overdue"
 
             by_status_map[(issue.status_id, issue.status_name or "Unknown")] += 1
             by_priority_map[(issue.priority_id, issue.priority_name or "Unknown")] += 1
