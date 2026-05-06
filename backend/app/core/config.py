@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     REDMINE_SECRET_KEY: str = ""
     REDMINE_TIMEOUT_SECONDS: int = 10
-    CLOSED_STATUS_IDS: str = "3,5"
+    CLOSED_STATUS_IDS: str = "3,4,5"
 
     @property
     def cors_origins_list(self) -> list[str]:

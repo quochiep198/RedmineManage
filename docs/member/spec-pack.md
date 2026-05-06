@@ -1,467 +1,729 @@
-# Goi dac ta --- (Member Performance Evaluation)
+# Gói đặc tả — Member Management & Reminder
 
-> Tao: 2026-05-05
-> Giai doan: [1]
-> Nguon tham chieu duy nhat cho thay doi nay.
-> Khong trien khai bat ky noi dung nao khong duoc viet o day.
-> Cac muc chua ro duoc liet ke trong Open Issues.
+> Tạo: 2026-05-06 · Giai đoạn: MVP / Demo nội bộ  
+> **Nguồn tham chiếu duy nhất cho thay đổi này.**  
+> Không triển khai bất kỳ nội dung nào không được viết ở đây. Các điểm chưa rõ → Open Issues.
 
-------------------------------------------------------------------------
+---
 
-## 1. Boi canh / Muc dich
+## 1. Bối cảnh / Mục đích
 
-Bo sung chuc nang thong ke va danh gia hieu suat member dua tren du lieu issue da duoc sync vao DB noi bo de phuc vu:
+PL/PM cần một màn hình để theo dõi tình trạng công việc của từng member dựa trên dữ liệu Redmine đã được đồng bộ về DB local.
 
-- theo doi workload cua tung member
-- nhan dien member co nguy co tre han
-- nhan dien member co nhieu issue uu tien cao chua xu ly xong
-- ho tro team leader/admin trong theo doi van hanh project
+Chức năng này không nhằm mục đích chấm điểm nhân sự hoặc xếp hạng cá nhân. Mục tiêu là hỗ trợ PL/PM:
 
-Module nay phu thuoc vao:
+- Phát hiện member đang quá tải.
+- Phát hiện issue bị quá hạn hoặc lâu chưa cập nhật.
+- Phát hiện issue có nguy cơ bị bỏ quên.
+- Phát hiện member cần được hỗ trợ.
+- Tạo và quản lý reminder cho đúng member, đúng issue, đúng lý do.
 
-- current project da duoc xac dinh bang `redmine_connections.identifier`
-- du lieu `projects` da duoc sync tu module Project Sync
-- du lieu `issues` da duoc sync tu module Issue Sync
+Tên chức năng đề xuất:
 
-Trong phase nay, he thong chi danh gia member cua mot current project duy nhat.
-Chuc nang nay chi su dung du lieu DB noi bo, khong goi Redmine truc tiep khi user mo man hinh.
+```text
+Member Management & Reminder
+```
 
-Man hinh ap dung:
+hoặc:
 
-- Dashboard > Member Performance
+```text
+Member Work Insight & Reminder
+```
 
-## 2. Pham vi
+---
 
-### Trong pham vi
+## 2. Phạm vi
 
-- Thong ke issue theo member trong current project.
-- Tinh `assigned_issues`, `open_issues`, `closed_issues`, `overdue_issues`.
-- Tinh `in_progress_issues`.
-- Tinh `completion_rate`.
-- Tinh `overdue_rate`.
-- Tinh `avg_done_ratio`.
-- Tinh `high_priority_open`.
-- Tinh `performance_score`.
-- Phan loai `risk_level`.
-- Danh dau `INSUFFICIENT_DATA` neu so issue qua it.
-- Filter theo date range, risk level, sort.
-- Xem chi tiet issue cua tung member.
-- Gom issue khong co assignee vao nhom `Unassigned`.
+### Trong phạm vi
 
-### Ngoai pham vi
+- Hiển thị danh sách member trong project hiện tại.
+- Hiển thị workload và risk của từng member.
+- Tính các chỉ số chính:
+  - Open Issue Count
+  - Estimated Workload
+  - Overdue Issue Count
+  - Ticket Aging Count
+  - Reopen Count
+  - Stale Update Count
+  - Workload Share
+- Xác định issue cần reminder.
+- Hiển thị danh sách issue cần reminder theo member.
+- Cho phép PL/PM tạo reminder thủ công hoặc từ gợi ý của hệ thống.
+- Cho phép cập nhật trạng thái reminder:
+  - Not Sent
+  - Sent
+  - Acknowledged
+  - Resolved
+  - Snoozed
+  - Ignored
+- Lưu lịch sử reminder vào DB local.
+- Hiển thị suggested actions để PL/PM hỗ trợ member.
 
-- Danh gia nhan su chinh thuc cho HR.
-- Danh gia bang AI.
-- Sync time entry.
-- Danh gia effort thuc te neu chua co time entry.
-- So sanh da project trong cung mot man hinh.
-- Notification tu dong.
-- Cấu hình cong thuc score tren UI trong phase nay.
+### Ngoài phạm vi
 
-## 3. Thuat ngu
+- Không dùng chức năng này để đánh giá nhân sự chính thức.
+- Không xếp hạng member theo năng lực.
+- Không tự động thay đổi assignee trên Redmine.
+- Không tự động cập nhật trạng thái issue trên Redmine.
+- Không bắt buộc gửi email/chat thật trong MVP.
+- Không thay thế quyết định của PL/PM.
+- Không đánh giá performance ngoài dữ liệu issue Redmine.
 
-| # | Thuat ngu | Dinh nghia |
+---
+
+## 3. Thuật ngữ
+
+| # | Thuật ngữ | Định nghĩa |
 |---|---|---|
-| 1 | Member | Nguoi duoc xac dinh chu yeu bang `assignee_id`; neu issue khong co `assignee_id` thi duoc gom vao nhom `Unassigned` |
-| 2 | assigned_issues | Tong issue duoc assign cho member |
-| 3 | open_issues | Tong issue khong thuoc nhom closed |
-| 4 | closed_issues | Tong issue thuoc nhom closed |
-| 5 | overdue_issues | Issue co `due_date < today` va khong thuoc nhom closed |
-| 6 | in_progress_issues | Issue co `status_id = 2` va khong thuoc nhom closed |
-| 7 | completion_rate | `closed_issues / assigned_issues * 100` |
-| 8 | overdue_rate | `overdue_issues / assigned_issues * 100` |
-| 9 | avg_done_ratio | Trung binh `done_ratio` cua issue cua member |
-| 10 | high_priority_open | So issue co `priority_id in {3,4}` va chua closed |
-| 11 | performance_score | Chi so tham khao trong khoang 0-100 |
-| 12 | risk_level | `LOW`, `MEDIUM`, `HIGH`, hoac `INSUFFICIENT_DATA` |
-| 13 | Current project | Project duy nhat dang duoc he thong xu ly, xac dinh bang `redmine_connections.identifier` |
+| 1 | Member | Người được assign issue trong project |
+| 2 | Open Issue | Issue chưa thuộc nhóm closed status |
+| 3 | Estimated Workload | Tổng estimated hours của các issue chưa đóng thuộc member |
+| 4 | Workload Share | Tỷ lệ workload của member trên tổng workload project |
+| 5 | Overdue Issue | Issue chưa đóng và due_date nhỏ hơn ngày hiện tại |
+| 6 | Ticket Aging | Issue chưa đóng tồn tại hoặc nằm ở trạng thái hiện tại quá lâu |
+| 7 | Stale Update | Issue chưa đóng nhưng lâu chưa được cập nhật |
+| 8 | Reopen Count | Số issue của member đã từng bị reopen |
+| 9 | Member Work Risk | Mức rủi ro công việc của member dựa trên workload, overdue, aging, reopen và stale update |
+| 10 | Reminder | Nhắc nhở được tạo cho member để cập nhật hoặc xử lý issue |
+| 11 | Reminder Reason | Lý do cần reminder, ví dụ Overdue, Aging, Stale, Reopened |
+| 12 | Reminder Status | Trạng thái xử lý reminder |
 
-## 4. Hien trang / Trang thai muc tieu
+---
 
-| # | Khia canh | Hien trang | Trang thai muc tieu |
+## 4. Hiện trạng / Trạng thái mục tiêu
+
+| # | Khía cạnh | Hiện trạng | Trạng thái mục tiêu |
 |---|---|---|---|
-| 1 | Thong ke member | [MISSING] | User xem duoc tong quan hieu suat cua tung member trong current project |
-| 2 | Theo doi workload | [MISSING] | Team leader/admin nhin duoc member nao dang co nhieu issue, issue tre, issue uu tien cao |
-| 3 | Danh gia rui ro | [MISSING] | He thong phan loai `LOW/MEDIUM/HIGH/INSUFFICIENT_DATA` de uu tien theo doi |
-| 4 | Chi tiet issue | [MISSING] | User mo duoc danh sach issue cua tung member |
+| 1 | Theo dõi member | PL/PM phải xem issue thủ công trong Redmine | Có màn hình tổng hợp member và tình trạng công việc |
+| 2 | Workload | Chưa nhìn nhanh ai đang quá tải | Hiển thị workload, workload share và overload risk |
+| 3 | Issue cần follow | Phải tự lọc overdue/stale issue | Hệ thống tự gợi ý issue cần reminder |
+| 4 | Reminder | Nhắc thủ công, khó theo dõi lịch sử | Lưu reminder status và lịch sử reminder |
+| 5 | Hỗ trợ member | PL/PM khó biết ai cần support | Hiển thị Member Work Risk và suggested actions |
 
-## 5. Chi tiet dac ta
+---
 
-### 5.1 Quyen truy cap
+## 5. Chi tiết đặc tả
 
-- User da dang nhap duoc phep xem member performance.
-- Neu user chua dang nhap, backend tra `401 Not authenticated`.
-- Phase nay khong yeu cau quyen admin de xem thong ke member.
+### 5.1. Nguồn dữ liệu
 
-### 5.2 Nguon du lieu
+Dữ liệu issue được đồng bộ từ Redmine về DB local.
 
-- Module chi doc du lieu tu DB noi bo.
-- Khong goi Redmine truc tiep khi user mo man hinh.
-- Chi thong ke issue cua current project hien hanh.
-- Date range trong MVP dua tren `redmine_updated_on`.
+Các bảng Redmine mirror cần dùng:
 
-### 5.3 Metric co ban
-
-| Metric | Cong thuc / y nghia |
+| Bảng | Mục đích |
 |---|---|
-| `assigned_issues` | Tong issue cua member trong current project va trong khoang loc |
-| `open_issues` | Tong issue khong thuoc nhom closed |
-| `closed_issues` | Tong issue thuoc nhom closed |
-| `overdue_issues` | Tong issue co `due_date < today` va khong closed |
-| `in_progress_issues` | Tong issue co `status_id = 2` va khong closed |
-| `completion_rate` | `closed_issues / assigned_issues * 100` |
-| `overdue_rate` | `overdue_issues / assigned_issues * 100` |
-| `avg_done_ratio` | Trung binh `done_ratio` |
-| `high_priority_open` | Tong issue co `priority_id in {3,4}` va khong closed |
-| `workload_score` | Gia tri tham khao bang `assigned_issues` trong MVP; khong co cong thuc tach rieng phuc tap trong phase nay |
+| issues | Lấy issue, assignee, status, priority, due date, estimate |
+| users | Lấy thông tin member |
+| issue_statuses | Xác định status hiện tại |
+| trackers | Xác định loại issue |
+| journals | Lấy lịch sử thay đổi issue |
+| journal_details | Lấy lịch sử đổi status để xác định reopen |
+| versions | Lấy target version nếu cần |
+| time_entries | Lấy spent hours nếu cần mở rộng |
 
-Rules:
-
-- Neu `assigned_issues = 0`, `completion_rate` va `overdue_rate` duoc tinh bang `0`.
-- Neu khong co `done_ratio`, `avg_done_ratio` bo qua record do; neu khong co record hop le thi gia tri bang `0`.
-- `closed` duoc xac dinh bang `issues.is_closed`, khong suy luan lai theo `status_name`.
-
-### 5.4 Performance score MVP
+Bảng mới cần thêm:
 
 ```text
-performance_score =
-  completion_rate * 0.5
-  + avg_done_ratio * 0.3
-  + (100 - overdue_rate) * 0.2
+member_reminders
 ```
 
-Rules:
+---
 
-- Gia tri duoc gioi han trong khoang `0` den `100`.
-- Day la chi so tham khao cho van hanh project, khong phai ket luan danh gia nang luc nhan su.
+### 5.2. Màn hình chính — Member Management & Reminder
 
-### 5.5 Risk level
+Màn hình gồm 4 khu vực:
 
-Rules:
+1. Summary
+2. Member List
+3. Selected Member Detail
+4. Issues Need Reminder
 
-1. Neu `assigned_issues < MIN_MEMBER_ISSUES`, `risk_level = INSUFFICIENT_DATA`.
-2. Nguoc lai, neu `performance_score < 60` hoac `overdue_rate >= 30`, `risk_level = HIGH`.
-3. Nguoc lai, neu `performance_score >= 80` va `overdue_rate < 10`, `risk_level = LOW`.
-4. Cac truong hop con lai, `risk_level = MEDIUM`.
+#### 5.2.1. Summary
 
-Gia tri mac dinh:
+Hiển thị tổng quan project hiện tại:
 
-- `MIN_MEMBER_ISSUES = 3`
+| Field | Mô tả |
+|---|---|
+| Project | Project hiện tại |
+| Period | Khoảng thời gian xem dữ liệu |
+| Total Members | Số member có issue trong project |
+| Overloaded Members | Số member có workload risk Warning/Critical |
+| Issues Need Reminder | Số issue cần reminder |
+| High Risk Members | Số member có Member Work Risk cao |
 
-Ly do:
+#### 5.2.2. Member List
 
-- Thu tu tren loai bo tinh chong lan giua `LOW`, `MEDIUM`, `HIGH`.
+Danh sách member cần hiển thị:
 
-### 5.6 API summary
+| Field | Mô tả |
+|---|---|
+| Member | Tên member |
+| Open Issues | Số issue chưa đóng |
+| Estimated Workload | Tổng estimated hours của issue chưa đóng |
+| Workload Share | Tỷ lệ workload so với toàn project |
+| Overdue Issues | Số issue quá hạn |
+| Aging Issues | Số issue aging vượt ngưỡng |
+| Reopened Issues | Số issue bị reopen |
+| Stale Issues | Số issue lâu chưa cập nhật |
+| Member Work Risk | Good / Need Attention / High Risk |
+| Reminder Needed | Số issue cần reminder |
 
-- Endpoint: `GET /api/member-performance/summary`
+#### 5.2.3. Selected Member Detail
 
-Query params:
+Khi chọn một member, hiển thị:
 
-| Param | Bat buoc | Mo ta |
-|---|---|---|
-| `from_date` | Khong | Ngay bat dau loc theo `redmine_updated_on`, dinh dang `YYYY-MM-DD` |
-| `to_date` | Khong | Ngay ket thuc loc theo `redmine_updated_on`, dinh dang `YYYY-MM-DD` |
-| `risk_level` | Khong | Loc theo `LOW`, `MEDIUM`, `HIGH`, `INSUFFICIENT_DATA` |
-| `sort_by` | Khong | `performance_score`, `overdue_issues`, `assigned_issues`, `member_name` |
-| `order` | Khong | `asc` hoac `desc`, mac dinh `desc` |
+| Field | Mô tả |
+|---|---|
+| Member name | Tên member |
+| Open issue count | Số issue chưa đóng |
+| Estimated workload | Tổng effort còn lại |
+| Overdue issue count | Số issue quá hạn |
+| Aging issue count | Số issue aging |
+| Reopen count | Số issue từng bị reopen |
+| Stale update count | Số issue lâu chưa cập nhật |
+| Main risks | Rủi ro chính của member |
+| Suggested actions | Gợi ý hành động cho PL/PM |
 
-Rules:
+#### 5.2.4. Issues Need Reminder
 
-- Phase nay khong co query param `project_id` vi he thong chi co 1 current project.
-- `from_date` va `to_date` la inclusive.
-- Neu khong gui date range, he thong thong ke tren toan bo issue cua current project.
-- API phai group issue theo member key.
-- Member key uu tien la:
-  - `assignee_id` neu co
-  - nguoc lai dung nhom ky thuat `unassigned`
+Danh sách issue cần reminder:
 
-Response `200 OK`:
+| Field | Mô tả |
+|---|---|
+| Issue ID | ID issue Redmine |
+| Subject | Tiêu đề issue |
+| Assignee | Member đang phụ trách |
+| Reason | Lý do cần reminder |
+| Priority | Độ ưu tiên |
+| Due date | Deadline |
+| Last update | Ngày cập nhật cuối |
+| Aging days | Số ngày aging |
+| Reminder status | Trạng thái reminder |
+| Last reminder date | Lần reminder gần nhất |
 
-```json
-{
-  "project": {
-    "id": 1,
-    "identifier": "nishimatsuya",
-    "name": "Nishimatsuya"
-  },
-  "date_range": {
-    "from_date": "2026-05-01",
-    "to_date": "2026-05-31",
-    "field": "redmine_updated_on"
-  },
-  "items": [
-    {
-      "member_key": "user:12",
-      "member_id": 12,
-      "member_name": "Nguyen Van A",
-      "assigned_issues": 20,
-      "open_issues": 8,
-      "closed_issues": 12,
-      "overdue_issues": 3,
-      "in_progress_issues": 4,
-      "completion_rate": 60.0,
-      "overdue_rate": 15.0,
-      "avg_done_ratio": 72.5,
-      "high_priority_open": 2,
-      "workload_score": 20,
-      "performance_score": 68.5,
-      "risk_level": "MEDIUM",
-      "insufficient_data": false
-    }
-  ],
-  "total": 1
-}
+---
+
+### 5.3. KPI cho Member
+
+#### 5.3.1. Open Issue Count
+
+```text
+Open Issue Count =
+  COUNT(issues.id)
+  WHERE assigned_to_id = member_id
+  AND status_id NOT IN Closed Status
 ```
 
-Sorting rules:
+Ý nghĩa:
 
-- `member_name` sap xep theo alphabet.
-- Cac metric so sap xep theo gia tri.
-- Mac dinh: `sort_by=performance_score`, `order=desc`.
+- Member đang giữ bao nhiêu issue chưa hoàn tất.
+- Dùng làm chỉ báo workload cơ bản.
 
-### 5.7 API member issue detail
+#### 5.3.2. Estimated Workload
 
-- Endpoint: `GET /api/member-performance/{member_key}/issues`
-
-Path param:
-
-- `member_key`
-
-Query params:
-
-| Param | Bat buoc | Mo ta |
-|---|---|---|
-| `status_id` | Khong | Loc theo status id |
-| `priority_id` | Khong | Loc theo priority id |
-| `overdue_only` | Khong | `true/false` |
-| `page` | Khong | Mac dinh `1` |
-| `page_size` | Khong | Mac dinh `20`, toi da `100` |
-
-Rules:
-
-- Phase nay khong co `project_id`.
-- API chi tra issue cua current project.
-- `member_key=unassigned` tra nhom issue khong co assignee.
-- `member_key=user:{assignee_id}` tra issue cua assignee do.
-
-Response `200 OK`:
-
-```json
-{
-  "member_key": "user:12",
-  "member_id": 12,
-  "member_name": "Nguyen Van A",
-  "items": [
-    {
-      "redmine_issue_id": 12345,
-      "subject": "Fix login bug",
-      "status_id": 2,
-      "status_name": "In Progress",
-      "priority_id": 4,
-      "priority_name": "High",
-      "due_date": "2026-05-10",
-      "done_ratio": 30,
-      "is_overdue": true,
-      "redmine_url": "https://redmine.example.com/issues/12345"
-    }
-  ],
-  "page": 1,
-  "page_size": 20,
-  "total": 1
-}
+```text
+Estimated Workload =
+  SUM(issues.estimated_hours)
+  WHERE assigned_to_id = member_id
+  AND status_id NOT IN Closed Status
 ```
 
-### 5.8 API risk members
+Nếu `estimated_hours` thiếu, hiển thị cảnh báo data quality và fallback sang Open Issue Count.
 
-- Endpoint: `GET /api/member-performance/risk-members`
+#### 5.3.3. Workload Share
 
-Query params:
-
-| Param | Bat buoc | Mo ta |
-|---|---|---|
-| `from_date` | Khong | Ngay bat dau loc theo `redmine_updated_on` |
-| `to_date` | Khong | Ngay ket thuc loc theo `redmine_updated_on` |
-| `min_risk_level` | Khong | `MEDIUM` hoac `HIGH`; mac dinh `MEDIUM` |
-
-Rules:
-
-- Phase nay khong co `project_id`.
-- API nay la subset cua summary, chi tra member co `risk_level` tu nguong tro len.
-- `INSUFFICIENT_DATA` khong tu dong nam trong `HIGH`; frontend co the hien thi rieng.
-
-Response `200 OK`:
-
-```json
-{
-  "items": [
-    {
-      "member_key": "user:12",
-      "member_id": 12,
-      "member_name": "Nguyen Van A",
-      "risk_level": "HIGH",
-      "reasons": [
-        "Overdue rate is 35%",
-        "High priority open issues: 4"
-      ]
-    }
-  ],
-  "total": 1
-}
+```text
+Workload Share (%) =
+  Member Estimated Workload / Total Project Estimated Workload * 100
 ```
 
-### 5.9 Data model
+Nếu không đủ estimated hours:
 
-Phase nay uu tien:
+```text
+Workload Share (%) =
+  Member Open Issue Count / Total Project Open Issue Count * 100
+```
 
-- Khong tao bang summary rieng
-- Tinh truc tiep tu bang `issues`
+#### 5.3.4. Overdue Issue Count
 
-Bang `issues` duoc tai su dung cac field:
+```text
+Overdue Issue Count =
+  COUNT(issues.id)
+  WHERE assigned_to_id = member_id
+  AND status_id NOT IN Closed Status
+  AND due_date < Current Date
+```
 
-- `project_id`
-- `assignee_id`
-- `assignee_name`
-- `status_id`
-- `status_name`
-- `priority_id`
-- `priority_name`
-- `due_date`
-- `done_ratio`
-- `is_closed`
-- `redmine_updated_on`
+#### 5.3.5. Ticket Aging Count
 
-Neu du lieu lon hon va can snapshot lich su, phase sau moi xem xet bang:
+```text
+Ticket Aging Count =
+  COUNT(issues.id)
+  WHERE assigned_to_id = member_id
+  AND status_id NOT IN Closed Status
+  AND Aging Days >= Aging Warning Threshold
+```
 
-- `member_performance_snapshots`
+MVP:
 
-### 5.10 Business rules
+```text
+Aging Days = Current Date - issues.created_on
+```
 
-- Chi thong ke issue cua current project.
-- Khong cho user truyen `project_id` trong phase nay.
-- Date range trong MVP dua tren `redmine_updated_on`.
-- `status_id = 2` duoc xem la `In Progress`.
-- Closed issue duoc xac dinh bang `issues.is_closed`.
-- Khong duoc suy luan member theo `assignee_name` neu `assignee_id` da co.
-- Issue khong co assignee duoc gom vao nhom `Unassigned`.
-- `priority_id in {3,4}` duoc xem la nhom uu tien cao.
-- `performance_score` chi la chi so tham khao.
-- Neu member co it hon `MIN_MEMBER_ISSUES`, he thong phai hien thi `INSUFFICIENT_DATA`.
+Nâng cao:
 
-## 6. Yeu cau phi chuc nang
+```text
+Aging Days = Current Date - Last Status Changed Date
+```
 
-| # | Danh muc | Yeu cau |
+#### 5.3.6. Stale Update Count
+
+```text
+Stale Update Count =
+  COUNT(issues.id)
+  WHERE assigned_to_id = member_id
+  AND status_id NOT IN Closed Status
+  AND Current Date - updated_on >= Stale Update Threshold
+```
+
+#### 5.3.7. Reopen Count
+
+```text
+Reopen Count =
+  COUNT(DISTINCT issue_id)
+  WHERE issue từng chuyển từ Closed Status sang Open Status
+  AND issue.assigned_to_id = member_id
+```
+
+Dữ liệu lấy từ `journals` và `journal_details`.
+
+---
+
+### 5.4. Member Work Risk
+
+#### 5.4.1. Mục đích
+
+Member Work Risk giúp PL/PM biết member nào cần được theo dõi hoặc hỗ trợ.
+
+Lưu ý:
+
+```text
+Member Work Risk không phải điểm đánh giá năng lực cá nhân.
+Đây là chỉ báo rủi ro công việc để hỗ trợ quản lý dự án.
+```
+
+#### 5.4.2. Công thức
+
+```text
+Member Work Risk Score =
+  Overload Score
++ Aging Score
++ Overdue Score
++ Reopen Score
++ Stale Update Score
+```
+
+#### 5.4.3. Cách chấm điểm đề xuất
+
+##### Overload Score
+
+| Điều kiện | Điểm |
+|---|---:|
+| Workload < 80h hoặc Workload Share < 30% | 0 |
+| Workload từ 80h đến dưới 120h hoặc Share từ 30% đến dưới 50% | 1 |
+| Workload >= 120h hoặc Share >= 50% | 2 |
+
+##### Aging Score
+
+| Điều kiện | Điểm |
+|---|---:|
+| Aging issue = 0 | 0 |
+| Aging issue từ 1 đến 3 | 1 |
+| Aging issue > 3 | 2 |
+
+##### Overdue Score
+
+| Điều kiện | Điểm |
+|---|---:|
+| Overdue issue = 0 | 0 |
+| Overdue issue từ 1 đến 3 | 1 |
+| Overdue issue > 3 | 2 |
+
+##### Reopen Score
+
+| Điều kiện | Điểm |
+|---|---:|
+| Reopen issue = 0 | 0 |
+| Reopen issue từ 1 đến 2 | 1 |
+| Reopen issue > 2 | 2 |
+
+##### Stale Update Score
+
+| Điều kiện | Điểm |
+|---|---:|
+| Stale issue = 0 | 0 |
+| Stale issue từ 1 đến 3 | 1 |
+| Stale issue > 3 | 2 |
+
+#### 5.4.4. Phân loại
+
+| Tổng điểm | Trạng thái | Ý nghĩa |
+|---:|---|---|
+| 0–2 | Good | Tình trạng bình thường |
+| 3–5 | Need Attention | Cần PL/PM theo dõi |
+| 6+ | High Risk | Cần hỗ trợ hoặc follow ngay |
+
+---
+
+### 5.5. Logic xác định issue cần reminder
+
+Một issue cần reminder nếu thỏa ít nhất một điều kiện:
+
+| Điều kiện | Reminder Reason |
+|---|---|
+| Issue chưa đóng và due_date < Current Date | Overdue |
+| Issue chưa đóng và updated_on quá 3 ngày | No recent update |
+| Issue aging >= 7 ngày | Aging issue |
+| Issue priority High/Critical và stale | High priority stale |
+| Issue bị reopen nhưng chưa có update mới | Reopened issue |
+
+#### 5.5.1. Rule ưu tiên reminder
+
+Nếu một issue thỏa nhiều điều kiện, ưu tiên reason theo thứ tự:
+
+1. High priority stale
+2. Overdue
+3. Reopened issue
+4. Aging issue
+5. No recent update
+
+#### 5.5.2. Reminder severity
+
+| Điều kiện | Severity |
+|---|---|
+| High priority stale | Critical |
+| Overdue priority High/Critical | Critical |
+| Overdue | Warning |
+| Reopened issue | Warning |
+| Aging issue | Warning |
+| No recent update | Info |
+
+---
+
+### 5.6. Reminder Workflow
+
+```text
+1. Hệ thống scan issue từ DB local.
+2. Detect issue cần remind.
+3. Gom nhóm issue theo assignee.
+4. PL/PM xem danh sách reminder suggestion.
+5. PL/PM chọn issue cần gửi reminder.
+6. Hệ thống tạo record trong member_reminders.
+7. Reminder status ban đầu là Not Sent hoặc Sent tùy thao tác.
+8. Sau khi member update issue, reminder chuyển sang Resolved.
+9. PL/PM có thể Snooze hoặc Ignore reminder.
+```
+
+---
+
+### 5.7. Reminder Status
+
+| Status | Ý nghĩa |
+|---|---|
+| Not Sent | Reminder được gợi ý nhưng chưa gửi |
+| Sent | PL/PM đã gửi reminder |
+| Acknowledged | Member đã phản hồi hoặc xác nhận |
+| Resolved | Issue đã được update/xử lý |
+| Snoozed | Tạm hoãn reminder |
+| Ignored | PL/PM bỏ qua reminder |
+
+---
+
+### 5.8. Reminder Message Template
+
+```text
+Hi [Member],
+
+Please update the following Redmine issues:
+
+1. #[Issue ID] [Subject]
+   Reason: [Reminder Reason]
+   Due date: [Due Date]
+   Last update: [Last Update]
+   Aging: [Aging Days] days
+
+Please update status, blocker, or expected completion date.
+```
+
+Phiên bản tiếng Việt:
+
+```text
+Hi [Member],
+
+Vui lòng cập nhật các issue Redmine sau:
+
+1. #[Issue ID] [Subject]
+   Lý do: [Reminder Reason]
+   Due date: [Due Date]
+   Cập nhật gần nhất: [Last Update]
+   Aging: [Aging Days] ngày
+
+Vui lòng cập nhật trạng thái, blocker hoặc ngày dự kiến hoàn thành.
+```
+
+---
+
+### 5.9. DB bổ sung
+
+#### 5.9.1. Bảng `member_reminders`
+
+| Field | Type | Mô tả |
 |---|---|---|
-| 1 | Hieu nang | MVP tinh truc tiep tu bang `issues`; API phai phan hoi trong muc hop ly voi du lieu issue da sync cua current project |
-| 2 | Bao mat | Chi user da dang nhap moi xem duoc thong ke member; API khong tra `raw_data_json` |
-| 3 | Tinh san sang | Khong duoc crash neu chua co current project hoac chua co issue; API tra danh sach rong |
-| 4 | Kha nang quan sat | Backend log thoi gian tong hop va so member duoc tra; khong log du lieu nhay cam |
+| id | bigint | Reminder ID |
+| project_id | bigint | Project ID |
+| issue_id | bigint | Issue ID |
+| assignee_id | bigint | Member ID |
+| reason | varchar | Overdue / Aging / Stale / Reopen |
+| severity | varchar | Info / Warning / Critical |
+| status | varchar | Not Sent / Sent / Acknowledged / Resolved / Snoozed / Ignored |
+| reminder_message | text | Nội dung reminder |
+| sent_at | datetime | Thời điểm gửi |
+| acknowledged_at | datetime | Thời điểm member xác nhận |
+| resolved_at | datetime | Thời điểm resolved |
+| snoozed_until | datetime | Thời điểm snooze đến |
+| ignored_at | datetime | Thời điểm ignore |
+| created_by | bigint | User tạo reminder |
+| created_at | datetime | Ngày tạo |
+| updated_at | datetime | Ngày cập nhật |
 
-## 7. Tieu chi chap nhan
+#### 5.9.2. Gợi ý index
 
-| # | ID | Mo ta | Loai kiem thu |
+| Index | Mục đích |
+|---|---|
+| project_id, assignee_id | Query reminder theo project/member |
+| issue_id | Kiểm tra reminder của issue |
+| status | Lọc reminder theo trạng thái |
+| severity | Lọc reminder theo mức độ |
+| created_at | Sort lịch sử reminder |
+
+---
+
+### 5.10. Suggested Actions
+
+| Tình huống | Suggested Action |
+|---|---|
+| Member overload | Review workload và cân nhắc hỗ trợ member |
+| Member có nhiều overdue issue | Kiểm tra blocker và ưu tiên xử lý issue quá hạn |
+| Member có nhiều aging issue | Nhắc member cập nhật tình trạng hoặc chia nhỏ issue |
+| Member có nhiều reopen issue | Review root cause: requirement, review, test hoặc implementation |
+| Member có nhiều stale issue | Gửi reminder yêu cầu cập nhật trạng thái |
+| Workload lệch lớn trong team | Cân nhắc redistribute issue ít ưu tiên |
+
+---
+
+## 6. Yêu cầu phi chức năng
+
+| # | Danh mục | Yêu cầu |
+|---|---|---|
+| 1 | Hiệu năng | Load màn hình member với tối thiểu 5.000 issue trong vòng 10 giây |
+| 2 | Bảo mật | Chỉ hiển thị dữ liệu thuộc project mà user có quyền xem |
+| 3 | Tính sẵn sàng | Nếu thiếu dữ liệu journals/journal_details, vẫn hiển thị workload, overdue và stale update |
+| 4 | Khả năng quan sát | Ghi log khi scan reminder, tạo reminder, đổi status reminder |
+| 5 | Khả năng cấu hình | Cho phép cấu hình closed status, stale threshold, aging threshold, overload threshold |
+| 6 | Tính minh bạch | UI phải hiển thị rõ chức năng này không dùng để đánh giá nhân sự chính thức |
+
+---
+
+## 7. Tiêu chí chấp nhận
+
+| # | ID | Mô tả | Loại kiểm thử |
 |---|---|---|---|
-| 1 | PERF-AC-001 | User xem duoc danh sach hieu suat member cua current project | API integration + UI |
-| 2 | PERF-AC-002 | He thong hien thi dung assigned/open/closed/overdue/in progress theo member | API integration |
-| 3 | PERF-AC-003 | He thong tinh dung `completion_rate` | API integration |
-| 4 | PERF-AC-004 | He thong tinh dung `overdue_rate` | API integration |
-| 5 | PERF-AC-005 | He thong tinh dung `performance_score` theo cong thuc MVP | API integration |
-| 6 | PERF-AC-006 | He thong phan loai dung `LOW/MEDIUM/HIGH/INSUFFICIENT_DATA` | API integration |
-| 7 | PERF-AC-007 | User filter duoc theo date range va risk level | API integration + UI |
-| 8 | PERF-AC-008 | User mo duoc danh sach issue cua tung member | API integration + UI |
-| 9 | PERF-AC-009 | Issue khong co assignee duoc gom vao `Unassigned` | API integration |
-| 10 | PERF-AC-010 | Member co it hon nguong toi thieu duoc danh dau `INSUFFICIENT_DATA` | API integration |
-| 11 | PERF-AC-011 | User chua dang nhap khong xem duoc member performance | Authorization |
+| 1 | MEMBER-AC-001/v1 | Hiển thị danh sách member trong project hiện tại | UI test |
+| 2 | MEMBER-AC-002/v1 | Tính được Open Issue Count theo từng member | Unit test |
+| 3 | MEMBER-AC-003/v1 | Tính được Estimated Workload theo từng member | Unit test |
+| 4 | MEMBER-AC-004/v1 | Tính được Workload Share theo từng member | Unit test |
+| 5 | MEMBER-AC-005/v1 | Tính được Overdue Issue Count theo từng member | Unit test |
+| 6 | MEMBER-AC-006/v1 | Tính được Ticket Aging Count theo từng member | Unit test |
+| 7 | MEMBER-AC-007/v1 | Tính được Stale Update Count theo từng member | Unit test |
+| 8 | MEMBER-AC-008/v1 | Tính được Reopen Count theo từng member từ journals/journal_details | Unit / Integration test |
+| 9 | MEMBER-AC-009/v1 | Tính được Member Work Risk Score và phân loại Good / Need Attention / High Risk | Unit test |
+| 10 | MEMBER-AC-010/v1 | Hiển thị member detail khi chọn một member | UI test |
+| 11 | MEMBER-AC-011/v1 | Detect được issue cần reminder theo rule đã định nghĩa | Unit test |
+| 12 | MEMBER-AC-012/v1 | Hiển thị danh sách Issues Need Reminder | UI test |
+| 13 | MEMBER-AC-013/v1 | Tạo được reminder record trong bảng member_reminders | Integration test |
+| 14 | MEMBER-AC-014/v1 | Cập nhật được Reminder Status | Integration test |
+| 15 | MEMBER-AC-015/v1 | Tự động chuyển reminder sang Resolved khi issue được update/xử lý | Integration test |
+| 16 | MEMBER-AC-016/v1 | Sinh được reminder message từ template | Unit test |
+| 17 | MEMBER-AC-017/v1 | Hiển thị suggested actions theo tình trạng member | Unit / UI test |
+| 18 | MEMBER-AC-018/v1 | UI hiển thị ghi chú không dùng chức năng này để đánh giá nhân sự chính thức | UI test |
 
-## 8. Vi du
+---
 
-### Cac luong binh thuong
+## 8. Ví dụ
 
-1. User mo Member Performance Page va xem danh sach hieu suat member cua current project.
-2. User filter theo `from_date`, `to_date`, `risk_level`.
-3. User mo danh sach issue cua tung member.
-4. He thong gom issue khong co assignee vao nhom `Unassigned`.
+### 8.1. Luồng bình thường
 
-### Cac luong loi
+1. PL/PM mở màn hình Member Management & Reminder.
+2. Hệ thống load danh sách member trong project hiện tại.
+3. Hệ thống tính KPI theo từng member.
+4. Hệ thống phân loại Member Work Risk.
+5. PL/PM chọn một member.
+6. Hệ thống hiển thị member detail và issue cần reminder.
+7. PL/PM chọn issue và bấm Send Reminder.
+8. Hệ thống tạo reminder record.
+9. Reminder status chuyển sang Sent.
+10. Sau khi member update issue, reminder chuyển sang Resolved.
 
-1. User chua dang nhap goi API, backend tra `401 Not authenticated`.
-2. `member_key` khong hop le, backend tra `404` hoac `422` theo contract implementation.
-
-### Cac truong hop bien
-
-1. Member co it hon `MIN_MEMBER_ISSUES` thi hien thi `INSUFFICIENT_DATA`.
-2. Issue khong co assignee duoc gom vao `Unassigned`.
-3. Chua co current project hoac chua co issue thi API tra danh sach rong.
-
-## 9. Wireframe ASCII (Tuy chon)
-
-### Member Performance Page
-
-```text
-+------------------------------------------------------------------------------------------------+
-| Member Performance                                                                             |
-+------------------------------------------------------------------------------------------------+
-| Current Project: Nishimatsuya                                                                  |
-| Date [ From - To ] Risk [v] Sort [v] Order [v] [ Apply ]                                      |
-+------------------------------------------------------------------------------------------------+
-| Member        | Score | Risk              | Assigned | Open | Closed | Overdue | In Progress |
-+------------------------------------------------------------------------------------------------+
-| Nguyen Van A  | 68.5  | MEDIUM            | 20       | 8    | 12     | 3       | 4           |
-| Unassigned    | 0.0   | INSUFFICIENT_DATA | 2        | 2    | 0      | 0       | 0           |
-+------------------------------------------------------------------------------------------------+
-```
-
-### Member Detail Drawer/Page
+### 8.2. Ví dụ output
 
 ```text
-+------------------------------------------------------------------------------------------------+
-| Member: Nguyen Van A                                                                           |
-+------------------------------------------------------------------------------------------------+
-| Score: 68.5 | Risk: MEDIUM | Completion: 60% | Overdue: 15%                                   |
-+------------------------------------------------------------------------------------------------+
-| ID | Subject | Status | Priority | Due Date | Done | Redmine                                  |
-+------------------------------------------------------------------------------------------------+
+Member: Nguyen Van A
+Status: Need Attention
+
+Insights:
+- Open issues: 14
+- Estimated workload: 95h
+- Overdue issues: 5
+- Aging issues > 14 days: 3
+- Reopened issues: 2
+- Stale issues: 5
+
+Suggested Actions:
+1. Check blocker with Nguyen Van A.
+2. Review overdue High/Critical issues.
+3. Rebalance low-priority issues if needed.
+4. Review reopened issues for root cause.
 ```
 
-Ghi chu:
+### 8.3. Luồng lỗi
 
-- Cac trang thai chinh: `LOW`, `MEDIUM`, `HIGH`, `INSUFFICIENT_DATA`
-- Can co thong diep empty state neu chua co current project hoac chua co issue
-- Frontend khong hien thi project dropdown trong phase nay
+1. Nếu không có dữ liệu member, hiển thị `No member data`.
+2. Nếu issue không có assignee, nhóm vào `Unassigned`.
+3. Nếu thiếu estimated_hours, hiển thị cảnh báo data quality.
+4. Nếu không có journals/journal_details, không tính Reopen Count và hiển thị `N/A`.
+5. Nếu không xác định được closed status, hiển thị lỗi cấu hình.
 
-## 10. Cac van de mo
+### 8.4. Trường hợp biên
 
-| # | Cau hoi | Nguoi phu trach | Han chot |
+1. Một issue có nhiều reminder: chỉ reminder active mới hiển thị ở danh sách chính.
+2. Issue đã resolved: reminder active chuyển sang Resolved.
+3. Issue bị snooze: không hiển thị lại cho đến khi hết `snoozed_until`.
+4. Issue bị ignored: không tự động tạo reminder mới cho cùng reason trong kỳ hiện tại.
+5. Member không còn issue open: Member Work Risk = Good nếu không có reminder active.
+6. Issue priority High/Critical stale: severity = Critical.
+
+---
+
+## 9. Wireframe ASCII
+
+### 9.1. Màn hình chính
+
+```text
++------------------------------------------------------+
+| Member Management & Reminder                         |
++------------------------------------------------------+
+| Project: [Current Project]   Period: [This week ▼]   |
++------------------------------------------------------+
+| Summary                                              |
+| Members: 8 | Overloaded: 2 | Need Remind: 12 issues  |
++------------------------------------------------------+
+| Member List                                          |
++--------+------+---------+-------+--------+------+------+
+| Name   | Open | Overdue | Aging | Reopen | Load | Risk |
++--------+------+---------+-------+--------+------+------+
+| A      | 14   | 5       | 3     | 2      | 95h  | Warn |
+| B      | 6    | 0       | 1     | 0      | 35h  | Good |
+| C      | 18   | 7       | 5     | 1      | 125h | High |
++------------------------------------------------------+
+| Selected Member Detail                               |
+| Member: A                                            |
+| - Open issues: 14                                    |
+| - Estimated workload: 95h                            |
+| - Overdue issues: 5                                  |
+| - Aging issues >14d: 3                               |
+| - Reopened issues: 2                                 |
+| - Stale issues: 5                                    |
++------------------------------------------------------+
+| Issues Need Reminder                                 |
+| ID  | Subject | Reason  | Last Update | Remind Status |
+|101  | API bug | Overdue | 5 days ago  | Not Sent      |
+|115  | UI fix  | Aging   | 12 days ago | Sent          |
++------------------------------------------------------+
+| [Send Reminder] [Mark Acknowledged] [Snooze] [Ignore]|
++------------------------------------------------------+
+```
+
+### 9.2. Reminder Detail
+
+```text
++------------------------------------------------------+
+| Reminder Detail                                      |
++------------------------------------------------------+
+| Issue: #101 API bug                                |
+| Member: A                                            |
+| Reason: Overdue                                      |
+| Severity: Warning                                    |
+| Due date: 2026-05-01                                 |
+| Last update: 2026-05-05                              |
++------------------------------------------------------+
+| Message Preview                                      |
+| Hi A,                                                |
+| Please update issue #101 API bug.                  |
+| Reason: Overdue                                      |
+| Please update status, blocker, or expected date.     |
++------------------------------------------------------+
+| [Send] [Edit Message] [Cancel]                       |
++------------------------------------------------------+
+```
+
+---
+
+## 10. Các vấn đề mở
+
+| # | Câu hỏi | Người phụ trách | Hạn chót |
 |---|---|---|---|
-| PERF-OI-001 | Da chot uu tien dung `assignee_id`; chi gom `Unassigned` khi thieu assignee | Product + Backend | Da chot |
-| PERF-OI-002 | Da chot closed issue dung `issues.is_closed` theo mapping backend, khong hardcode theo `status_name` | Product + Backend | Da chot |
-| PERF-OI-003 | Co can dua `spent_hours` hoac `estimated_hours` vao score o phase sau khong | Product | Bo qua|
-| PERF-OI-004 | Co can cho phep drill-down tu risk chart hoac dashboard sang member performance khong | Product + Frontend | [MISSING] |
-| PERF-OI-005 | Co can snapshot lich su theo ngay/tuan sau MVP khong | Product + Backend | Bo qua |
+| OI-1 | Reminder có cần gửi thật qua email/chat ở MVP không? | PM / Dev Lead | [MISSING] |
+| OI-2 | Closed status chính thức của project là gì? | PM / Redmine Admin | status_id in(3,4,5) |
+| OI-3 | Ngưỡng stale update là 3 ngày hay theo cấu hình project? | PM / PL | [MISSING] |
+| OI-4 | Ngưỡng workload 80h/120h có phù hợp với capacity thực tế không? | PM / PL | `overload_warning_hours = 160`, `overload_critical_hours = 200` |
+| OI-5 | Member Work Risk có cần lưu snapshot theo tuần không? | PM / Dev Lead | [MISSING] |
+| OI-6 | Reminder status Acknowledged được cập nhật thủ công hay tự động từ phản hồi member? | PM / Dev Lead | [MISSING] |
+| OI-7 | Có cần phân quyền Admin/PM/Viewer cho thao tác reminder không? | PM / Dev Lead | [MISSING] |
 
-## 11. Rui ro
+---
 
-| # | Rui ro | Kha nang xay ra | Muc do anh huong | Bien phap giam thieu |
+## 11. Rủi ro
+
+| # | Rủi ro | Khả năng xảy ra | Mức độ ảnh hưởng | Biện pháp giảm thiểu |
 |---|---|---|---|---|
-| 1 | Score bi hieu nham thanh danh gia nang luc nhan su chinh thuc | Trung binh | Cao | Ghi ro day la chi so tham khao |
-| 2 | Member co it issue gay mau nho, score khong on dinh | Cao | Trung binh | Dung `INSUFFICIENT_DATA` |
-| 3 | Cau hinh closed status sai lam sai metric | Trung binh | Cao | Tai su dung `issues.is_closed` da duoc dong bo theo mapping backend |
-| 4 | Assignee bi thieu hoac null gay kho hieu | Trung binh | Trung binh | Gom vao `Unassigned` va hien thi ro tren UI |
+| 1 | Chức năng bị hiểu sai là đánh giá năng lực cá nhân | Trung bình | Cao | Ghi rõ mục tiêu là hỗ trợ workload và reminder, không dùng để đánh giá nhân sự |
+| 2 | estimated_hours thiếu làm workload không chính xác | Cao | Trung bình | Fallback sang Open Issue Count và hiển thị data quality warning |
+| 3 | Thiếu journals/journal_details làm Reopen Count không chính xác | Trung bình | Trung bình | Hiển thị `N/A` và ghi log thiếu dữ liệu |
+| 4 | Reminder quá nhiều gây noise cho member | Trung bình | Trung bình | Hỗ trợ severity, snooze và ignore |
+| 5 | Ngưỡng risk không phù hợp với từng project | Trung bình | Trung bình | Cho phép cấu hình threshold |
+| 6 | PL/PM quên xử lý reminder đã gửi | Trung bình | Trung bình | Hiển thị reminder status và danh sách reminder active |
 
-------------------------------------------------------------------------
+---
 
-## Bang truy vet
+## Bảng truy vết
 
-| # | AC | Man hinh/API | DB | Logs | Quyen | Loai kiem thu |
+| # | AC | Màn hình/API | DB | Logs | Quyền | Loại kiểm thử |
 |---|---|---|---|---|---|---|
-| 1 | PERF-AC-001 | Member Performance Page / `GET /api/member-performance/summary` | `issues` | Aggregate log | Authenticated user | API integration + UI |
-| 2 | PERF-AC-002 | `GET /api/member-performance/summary` | `issues` | Aggregate log | Authenticated user | API integration |
-| 3 | PERF-AC-003 | `GET /api/member-performance/summary` | `issues` | Aggregate log | Authenticated user | API integration |
-| 4 | PERF-AC-004 | `GET /api/member-performance/summary` | `issues` | Aggregate log | Authenticated user | API integration |
-| 5 | PERF-AC-005 | `GET /api/member-performance/summary` | `issues` | Aggregate log | Authenticated user | API integration |
-| 6 | PERF-AC-006 | `GET /api/member-performance/summary`, `GET /api/member-performance/risk-members` | `issues` | Aggregate log | Authenticated user | API integration |
-| 7 | PERF-AC-007 | Member Performance Page / `GET /api/member-performance/summary` | `issues` | Aggregate log | Authenticated user | API integration + UI |
-| 8 | PERF-AC-008 | Member Detail Drawer/Page / `GET /api/member-performance/{member_key}/issues` | `issues` | Aggregate log | Authenticated user | API integration + UI |
-| 9 | PERF-AC-009 | `GET /api/member-performance/summary` | `issues` | Aggregate log | Authenticated user | API integration |
-| 10 | PERF-AC-010 | `GET /api/member-performance/summary` | `issues` | Aggregate log | Authenticated user | API integration |
-| 11 | PERF-AC-011 | Tat ca API member performance | N/A | Authorization failure log | Unauthenticated user | Authorization |
+| 1 | MEMBER-AC-001/v1 | Member Management screen | issues, users | Query log | Viewer | UI test |
+| 2 | MEMBER-AC-002/v1 | Member KPI API | issues | Calculation log | Viewer | Unit test |
+| 3 | MEMBER-AC-003/v1 | Member KPI API | issues | Calculation log | Viewer | Unit test |
+| 4 | MEMBER-AC-004/v1 | Member KPI API | issues | Calculation log | Viewer | Unit test |
+| 5 | MEMBER-AC-005/v1 | Member KPI API | issues | Calculation log | Viewer | Unit test |
+| 6 | MEMBER-AC-006/v1 | Member KPI API | issues, journals, journal_details | Calculation log | Viewer | Unit test |
+| 7 | MEMBER-AC-007/v1 | Member KPI API | issues | Calculation log | Viewer | Unit test |
+| 8 | MEMBER-AC-008/v1 | Member KPI API | issues, journals, journal_details | Calculation log | Viewer | Unit / Integration test |
+| 9 | MEMBER-AC-009/v1 | Member KPI API | issues, users | Calculation log | Viewer | Unit test |
+| 10 | MEMBER-AC-010/v1 | Member Detail panel | issues, users | Query log | Viewer | UI test |
+| 11 | MEMBER-AC-011/v1 | Reminder Detection API | issues, journals, journal_details | Reminder scan log | Viewer | Unit test |
+| 12 | MEMBER-AC-012/v1 | Issues Need Reminder panel | issues, member_reminders | Query log | Viewer | UI test |
+| 13 | MEMBER-AC-013/v1 | Create Reminder API | member_reminders | Reminder create log | PM / PL | Integration test |
+| 14 | MEMBER-AC-014/v1 | Update Reminder API | member_reminders | Reminder update log | PM / PL | Integration test |
+| 15 | MEMBER-AC-015/v1 | Reminder Resolve Job/API | member_reminders, issues | Reminder resolve log | System | Integration test |
+| 16 | MEMBER-AC-016/v1 | Reminder Message Generator | member_reminders | Message generate log | PM / PL | Unit test |
+| 17 | MEMBER-AC-017/v1 | Suggested Actions panel | issues, member_reminders | Suggestion log | Viewer | Unit / UI test |
+| 18 | MEMBER-AC-018/v1 | Member Management screen | [MISSING] | [MISSING] | Viewer | UI test |

@@ -28,6 +28,10 @@ def build_redmine_issue_url(base_url: str, issue_id: int) -> str:
     return _build_url(base_url, f"issues/{issue_id}")
 
 
+def build_redmine_issue_detail_url(base_url: str, issue_id: int) -> str:
+    return _build_url(base_url, f"issues/{issue_id}.json")
+
+
 async def fetch_redmine_account(base_url: str, api_key: str) -> httpx.Response:
     url = build_redmine_account_url(base_url)
     async with httpx.AsyncClient(timeout=settings.REDMINE_TIMEOUT_SECONDS) as client:
@@ -73,5 +77,22 @@ async def fetch_redmine_issues(
                 "limit": limit,
                 "offset": offset,
             },
+            headers={"X-Redmine-API-Key": api_key},
+        )
+
+
+async def fetch_redmine_issue_detail(
+    base_url: str,
+    api_key: str,
+    issue_id: int,
+    *,
+    include: str | None = None,
+) -> httpx.Response:
+    url = build_redmine_issue_detail_url(base_url, issue_id)
+    params = {"include": include} if include else None
+    async with httpx.AsyncClient(timeout=settings.REDMINE_TIMEOUT_SECONDS) as client:
+        return await client.get(
+            url,
+            params=params,
             headers={"X-Redmine-API-Key": api_key},
         )

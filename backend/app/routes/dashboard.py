@@ -74,16 +74,15 @@ async def get_dashboard_summary(
             "closed_issues": 0,
             "overdue_issues": 0,
             "health_summary": {
-                "score": 0.0,
-                "max_score": 12,
                 "status": "Red",
+                "score_label": None,
                 "trend_value": None,
                 "trend_direction": "none",
             },
-            "metrics": [],
+            "kpi_cards": [],
             "main_risk_drivers": [],
             "suggested_actions": [],
-            "early_warnings": [],
+            "data_quality_warnings": [],
             "health_trend": [],
         }
         if not connection or not project:
@@ -149,10 +148,10 @@ async def get_dashboard_summary(
             "closed_issues": summary["closed_issues"],
             "overdue_issues": summary["overdue_issues"],
             "health_summary": summary["health_summary"],
-            "metrics": summary["metrics"],
+            "kpi_cards": summary["kpi_cards"],
             "main_risk_drivers": summary["main_risk_drivers"],
             "suggested_actions": summary["suggested_actions"],
-            "early_warnings": summary["early_warnings"],
+            "data_quality_warnings": summary["data_quality_warnings"],
             "health_trend": health_trend,
         }
 

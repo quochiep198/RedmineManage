@@ -1,720 +1,624 @@
-# Gói đặc tả — [MISSING] (Project Health)
+# Gói Đặc Tả Project Health KPI Pack
 
-> Tạo: [MISSING] · Giai đoạn: [MISSING]  
-> **Nguồn tham chiếu duy nhất cho thay đổi này.**  
-> Không triển khai bất kỳ nội dung nào không được viết ở đây. Các điểm chưa rõ → Open Issues.
+> Tạo: 2026-05-06
+> Giai đoạn: MVP / Demo nội bộ
+> Tài liệu này là nguồn tham chiếu duy nhất cho phạm vi triển khai của KPI Pack.
 
 ---
 
 ## 1. Bối cảnh / Mục đích
 
-Tính **sức khỏe dự án (Project Health)** dựa trên dữ liệu có thể lấy từ Redmine.
+Ứng dụng hiện tại đã có phần đánh giá Project Health tổng quát. Tuy nhiên người dùng vẫn thiếu phần giải thích cụ thể nguyên nhân vì sao một dự án đang ở trạng thái Green / Yellow / Red.
 
-Redmine không có sẵn một chỉ số chuẩn gọi là “Project Health”, vì vậy cần tổng hợp nhiều chỉ số như tiến độ, issue, bug, trễ hạn và effort để đánh giá tình trạng dự án.
+Mục tiêu của gói KPI này là bổ sung 3 chỉ số đơn giản, dễ hiểu, và có giá trị quản lý thực tế:
+
+1. **Ticket Aging**
+   Phát hiện issue mở quá lâu và có nguy cơ bị bỏ quên.
+2. **Assignee Overload**
+   Phát hiện thành viên đang gánh workload cao bất thường.
+3. **Reopen Rate**
+   Phản ánh chất lượng xử lý issue thông qua tỷ lệ issue bị mở lại sau khi đã đóng.
+
+Mục tiêu của KPI Pack là giúp PL/PM trả lời nhanh 4 câu hỏi:
+
+- Issue nào đang bị stuck.
+- Ai đang có nguy cơ quá tải.
+- Chất lượng xử lý issue có dấu hiệu bất ổn hay không.
+- Hành động ưu tiên tiếp theo là gì.
+
+---
 
 ## 2. Phạm vi
 
 ### Trong phạm vi
-- Sử dụng các trường Redmine: `% Done`, `Status`, `Target version`, `Start date`, `Due date`, `Tracker`, `Priority`, `Estimated hours`, `Spent hours`, `Assignee`, `Updated`, `Created`.
-- Tính các chỉ số:
-  - Tiến độ so với deadline
-  - Tỷ lệ issue đã đóng (mặc định issue có `status_id = 3` hoặc `status_id = 5` được xem là đã đóng)
-  - Issue quá hạn
-  - Bug / Defect còn mở
-  - Effort: Estimated hours so với Spent hours
-  - Issue không được cập nhật lâu
-- Tính Project Health Score tối đa 12 điểm.
-- Phân loại sức khỏe dự án theo Green / Yellow / Red.
-- Gợi ý hành động theo trạng thái Green / Yellow / Red.
-- Cung cấp template báo cáo ngắn.
-- Theo dõi Health Trend theo ngày/tuần.
-- Phân tích nguyên nhân chính khiến score thấp hoặc giảm.
-- Phát hiện cảnh báo sớm dựa trên rule.
-- Đề xuất hành động cụ thể dựa trên risk driver.
-- Cho phép cấu hình threshold, weight, closed status và bug tracker.
-- Hiển thị dashboard cho một dự án hiện tại và drill-down issue rủi ro.
+
+- Sử dụng dữ liệu issue đã đồng bộ từ Redmine về DB local.
+- Tính và hiển thị 3 KPI:
+  - Ticket Aging
+  - Assignee Overload
+  - Reopen Rate
+- Hiển thị 3 KPI trên dashboard của project hiện tại.
+- Cho phép drill-down từ từng KPI xuống danh sách issue liên quan.
+- Sinh `Main Risk Drivers` và `Suggested Actions` dựa trên 3 KPI trên.
+- Cho phép cấu hình:
+  - Closed status IDs
+  - Aging thresholds
+  - Overload thresholds
+  - Reopen thresholds
 
 ### Ngoài phạm vi
 
-- Tự động thay đổi dữ liệu trong Redmine.
-- Tự động assign/reassign issue trên Redmine.
-- Thay thế quyết định của PM / BrSE / Leader.
-- Dự đoán chính xác ngày hoàn thành dự án bằng AI/ML nâng cao.
-- Tích hợp trực tiếp API Redmine ở giai đoạn đầu nếu MVP chỉ dùng sử dụng dữ liệu đã được đồng bộ từ Redmine về DB local.
+- Không tự động cập nhật dữ liệu lên Redmine.
+- Không tự động assign hoặc reassign issue.
+- Không gửi email hoặc chat notification.
+- Không dùng AI/ML để dự đoán ngày hoàn thành dự án.
+- Không xếp hạng hiệu suất cá nhân.
+- Không thay thế quyết định của PL/PM.
+- Không thay đổi công thức tính Project Health tổng hiện tại trong giai đoạn MVP này.
 
-## 3. Thuật ngữ
+---
 
-| #   | Thuật ngữ | Định nghĩa |
-| --- | --------- | ---------- |
-| 1   | Project Health | Chỉ số sức khỏe dự án được tổng hợp từ nhiều chỉ số như tiến độ, issue, bug, trễ hạn và effort |
-| 2   | Planned Progress (%) | `Số ngày đã trôi qua / Tổng số ngày kế hoạch * 100` |
-| 3   | Actual Progress (%) | Trung bình `% Done` của các issue |
-| 4   | Schedule Gap (%) | `Actual Progress - Planned Progress` |
-| 5   | Closed Rate (%) | `Số issue đã đóng / Tổng số issue * 100` |
-| 6   | Overdue Issue | Issue chưa đóng và `Due date < ngày hiện tại` |
-| 7   | Overdue Rate (%) | `Số issue quá hạn / Tổng số issue chưa đóng * 100` |
-| 8   | Open Bug Rate (%) | `Số bug chưa đóng / Tổng số issue chưa đóng * 100` |
-| 9   | Effort Ratio (%) | `Spent hours / Estimated hours * 100` |
-| 10  | Stale Issue | Issue chưa đóng và `Updated` quá 7 ngày |
-| 11  | Stale Rate (%) | `Số stale issue / Tổng số issue chưa đóng * 100` |
+## 3. Nguyên tắc MVP
 
-## 4. Hiện trạng / Trạng thái mục tiêu
+Để giữ phạm vi gọn và triển khai được nhanh, MVP tuân thủ các nguyên tắc sau:
 
-| #   | Khía cạnh | Hiện trạng | Trạng thái mục tiêu |
-| --- | --------- | ---------- | ------------------- |
-| 1   | Chỉ số Project Health trong Redmine | Redmine không có sẵn một chỉ số chuẩn gọi là “Project Health” | Tổng hợp nhiều chỉ số từ dữ liệu Redmine để đánh giá tình trạng dự án |
-| 2   | Dữ liệu đầu vào | Có thể lấy dữ liệu từ issues | Sử dụng các trường Redmine được liệt kê trong tài liệu |
-| 3   | Đánh giá theo thời gian | Chưa có lịch sử điểm health theo ngày/tuần | Theo dõi theo tuần để thấy xu hướng tăng/giảm của Project Health |
-| 4   | Phân tích nguyên nhân | Chưa chỉ ra nguyên nhân chính khiến điểm thấp | Xác định top risk drivers theo assignee, tracker/tên issue, overdue, bug, effort |
-| 5   | Đề xuất hành động | Chỉ có gợi ý chung theo Green/Yellow/Red | Đề xuất hành động cụ thể dựa trên dữ liệu rủi ro |
-| 6   | Cảnh báo sớm | Chỉ đánh giá sau khi tính score | Phát hiện xu hướng xấu trước khi dự án chuyển sang Red |
-| 7   | Cấu hình scoring | Công thức/ngưỡng đang cố định | Cho phép cấu hình status closed, tracker bug, threshold và trọng số metric |
+1. Chỉ tính đúng 3 KPI trong tài liệu này.
+2. Ưu tiên công thức đơn giản, dễ kiểm chứng.
+3. Chỉ dùng dữ liệu đã xác nhận sẵn có trong local DB.
+4. Nếu một KPI phụ thuộc vào dữ liệu chưa sẵn sàng thì KPI đó phải hiển thị `N/A` kèm cảnh báo data quality, không tự suy diễn bằng logic phức tạp ngoài spec.
+5. `Project Health Score` hiện tại nếu còn được hiển thị thì được xem là phần hiện hữu của hệ thống; KPI Pack chỉ đóng vai trò giải thích bổ sung, không định nghĩa lại score tổng trong tài liệu này.
 
-## 5. Chi tiết đặc tả
+---
 
-### 5.1. Dữ liệu đầu vào
+## 4. Thuật ngữ
 
-Dữ liệu issue được đồng bộ định kỳ từ Redmine về DB local và sử dụng trực tiếp từ DB.
+| # | Thuật ngữ | Định nghĩa |
+|---|---|---|
+| 1 | Open Issue | Issue có `status_id` không thuộc danh sách Closed Status IDs |
+| 2 | Closed Issue | Issue có `status_id` thuộc danh sách Closed Status IDs |
+| 3 | Aging Days | Số ngày tính từ ngày tạo issue đến ngày tính KPI |
+| 4 | Aging Issue | Open issue có `Aging Days` vượt ngưỡng warning |
+| 5 | Assignee Workload | Tổng `estimated_hours` của các open issue được gán cho một assignee |
+| 6 | Workload Share | Tỷ trọng workload của một assignee trên tổng workload open issue của project |
+| 7 | Reopened Issue | Issue có lịch sử chuyển trạng thái từ closed status sang open status |
+| 8 | Reopen Rate | Tỷ lệ `Reopened Issue / Closed Issue Count` trong cửa sổ thời gian tính toán |
+| 9 | KPI Threshold | Ngưỡng phân loại `Good / Warning / Critical` |
+| 10 | Calculation Date | Ngày hệ thống dùng để tính KPI |
 
-| Nhóm dữ liệu | Trường Redmine |
+---
+
+## 5. Dữ liệu đầu vào
+
+### 5.1. Bảng dữ liệu sử dụng
+
+| Bảng | Bắt buộc | Mục đích |
+|---|---|---|
+| `issues` | Có | Lấy dữ liệu issue hiện tại |
+| `users` | Có | Lấy tên assignee |
+| `issue_statuses` | Có | Mapping trạng thái issue |
+| `trackers` | Có | Hiển thị loại issue nếu cần |
+| `journals` | Chỉ bắt buộc cho Reopen Rate | Đọc lịch sử thay đổi issue |
+| `journal_details` | Chỉ bắt buộc cho Reopen Rate | Đọc thay đổi `status_id` |
+
+### 5.2. Trường dữ liệu tối thiểu
+
+| Trường | Bảng | Mục đích |
+|---|---|---|
+| `id` | `issues` | ID issue |
+| `subject` | `issues` | Tiêu đề issue |
+| `project_id` | `issues` | Xác định project |
+| `status_id` | `issues` | Trạng thái hiện tại |
+| `assigned_to_id` | `issues` | Assignee |
+| `priority_id` | `issues` | Độ ưu tiên |
+| `tracker_id` | `issues` | Loại issue |
+| `estimated_hours` | `issues` | Tính workload |
+| `created_on` | `issues` | Tính aging |
+| `closed_on` | `issues` | Đếm closed issue trong time window nếu có |
+| `due_date` | `issues` | Phục vụ drill-down / context |
+
+### 5.3. Tiền điều kiện dữ liệu
+
+- `Ticket Aging` và `Assignee Overload` phải tính được chỉ với dữ liệu từ bảng `issues`.
+- `Reopen Rate` chỉ được tính khi local DB có đủ `journals` và `journal_details`.
+- Trong phase MVP này, phần sync `journals` và `journal_details` là hạng mục bắt buộc để triển khai `Reopen Rate`.
+- Nếu tại runtime vẫn thiếu dữ liệu history status:
+  - `Ticket Aging` vẫn tính bình thường theo `created_on`.
+  - `Reopen Rate` hiển thị `N/A`.
+  - Dashboard hiển thị cảnh báo `Reopen data unavailable`.
+
+---
+
+## 6. Cấu hình chung
+
+Tất cả cấu hình trong MVP phải dùng **status ID**, không dùng status name trong logic tính toán.
+
+| Cấu hình | Giá trị mặc định đề xuất | Ghi chú |
+|---|---|---|
+| `closed_status_ids` | `[3, 4, 5]` | Đã chốt |
+| `aging_warning_days` | `7` | Warning khi `Aging Days >= 7` |
+| `aging_critical_days` | `14` | Critical khi `Aging Days >= 14` |
+| `overload_warning_hours` | `160` | Warning khi workload theo giờ >= 160 |
+| `overload_critical_hours` | `200` | Critical khi workload theo giờ >= 200 |
+| `overload_warning_share_pct` | `30` | Warning khi workload share >= 30% |
+| `overload_critical_share_pct` | `50` | Critical khi workload share >= 50% |
+| `reopen_warning_pct` | `5` | Warning khi reopen rate >= 5% |
+| `reopen_critical_pct` | `15` | Critical khi reopen rate >= 15% |
+| `reopen_window_days` | `15` | Chỉ tính các lần closed / reopened trong 15 ngày gần nhất |
+| `calculation_date` | Ngày hiện tại | Dùng cho toàn bộ KPI |
+
+---
+
+## 7. KPI 1: Ticket Aging
+
+### 7.1. Mục đích
+
+Phát hiện open issue tồn tại quá lâu để PL/PM chủ động review blocker hoặc ownership.
+
+### 7.2. Công thức MVP
+
+MVP chỉ dùng công thức đơn giản:
+
+```text
+Aging Days = Calculation Date - issues.created_on
+```
+
+Chỉ tính cho `Open Issue`.
+
+### 7.3. Không dùng trong MVP
+
+- Không tính `Aging In Current Status`.
+- Không đọc history status để tìm `Last Status Changed Date`.
+- Không phân biệt aging theo từng trạng thái workflow.
+
+Phần này có thể làm ở phase sau nếu dữ liệu history được xác nhận đầy đủ.
+
+### 7.4. Phân loại
+
+| Điều kiện | Trạng thái |
 |---|---|
-| Tiến độ | `% Done`, `Status`, `Target version` |
-| Kế hoạch | `Start date`, `Due date` |
-| Loại công việc | `Tracker` |
-| Ưu tiên | `Priority` |
-| Effort | `Estimated hours`, `Spent hours` |
-| Người phụ trách | `Assignee` |
-| Trạng thái | `Status` |
-| Ngày cập nhật | `Updated` |
-| Ngày tạo | `Created` |
+| `Aging Days < aging_warning_days` | Good |
+| `aging_warning_days <= Aging Days < aging_critical_days` | Warning |
+| `Aging Days >= aging_critical_days` | Critical |
 
-### 5.2. Tiến độ so với deadline
+### 7.5. Output
 
-Ý nghĩa: đánh giá dự án đang đi đúng tiến độ hay bị chậm so với kế hoạch.
-
-Cách tính:
-
-```text
-Planned Progress (%) = Số ngày đã trôi qua / Tổng số ngày kế hoạch * 100
-Actual Progress (%) = Trung bình % Done của các issue
-Schedule Gap (%) = Actual Progress - Planned Progress
-```
-
-Cách chấm điểm:
-
-| Điều kiện | Điểm |
-|---|---:|
-| Actual Progress >= Planned Progress | 2 |
-| Actual Progress chậm hơn kế hoạch <= 10% | 1 |
-| Actual Progress chậm hơn kế hoạch > 10% | 0 |
-
-### 5.3. Tỷ lệ issue đã đóng
-
-Ý nghĩa: đánh giá mức độ hoàn thành công việc.
-
-Cách tính:
-
-```text
-Closed Rate (%) = Số issue đã đóng / Tổng số issue * 100
-```
-
-Cách chấm điểm:
-
-| Điều kiện | Điểm |
-|---|---:|
-| Closed Rate >= 80% | 2 |
-| Closed Rate từ 50% đến dưới 80% | 1 |
-| Closed Rate < 50% | 0 |
-
-### 5.4. Issue quá hạn
-
-Ý nghĩa: đánh giá mức độ kiểm soát deadline.
-
-Cách tính:
-
-```text
-Overdue Issue = Issue chưa đóng và Due date < ngày hiện tại
-Overdue Rate (%) = Số issue quá hạn / Tổng số issue chưa đóng * 100
-```
-
-Cách chấm điểm:
-
-| Điều kiện | Điểm |
-|---|---:|
-| Overdue Rate = 0% | 2 |
-| Overdue Rate <= 10% | 1 |
-| Overdue Rate > 10% | 0 |
-
-### 5.5. Bug / Defect còn mở
-
-Ý nghĩa: đánh giá chất lượng dự án.
-
-Cách tính:
-
-```text
-Open Bug Rate (%) = Số bug chưa đóng / Tổng số issue chưa đóng * 100
-```
-
-Trong Redmine, bug thường được xác định bằng `Tracker = Bug` hoặc `Tracker = Defect`.
-
-Cách chấm điểm:
-
-| Điều kiện | Điểm |
-|---|---:|
-| Open Bug Rate <= 10% | 2 |
-| Open Bug Rate từ trên 10% đến 25% | 1 |
-| Open Bug Rate > 25% | 0 |
-
-### 5.6. Effort: Estimated hours so với Spent hours
-
-Ý nghĩa: đánh giá độ chính xác của estimate và nguy cơ vượt effort.
-
-Cách tính:
-
-```text
-Effort Ratio (%) = Spent hours / Estimated hours * 100
-```
-
-Cách chấm điểm:
-
-| Điều kiện | Điểm |
-|---|---:|
-| Effort Ratio <= 100% | 2 |
-| Effort Ratio từ trên 100% đến 120% | 1 |
-| Effort Ratio > 120% | 0 |
-
-Lưu ý: nếu `Estimated hours` bị thiếu nhiều, chỉ số này không đáng tin cậy.
-
-### 5.7. Issue không được cập nhật lâu
-
-Ý nghĩa: phát hiện issue có nguy cơ bị bỏ quên.
-
-Cách tính:
-
-```text
-Stale Issue = Issue chưa đóng và Updated quá 7 ngày
-Stale Rate (%) = Số stale issue / Tổng số issue chưa đóng * 100
-```
-
-Cách chấm điểm:
-
-| Điều kiện | Điểm |
-|---|---:|
-| Stale Rate <= 5% | 2 |
-| Stale Rate từ trên 5% đến 15% | 1 |
-| Stale Rate > 15% | 0 |
-
-### 5.8. Công thức tính Project Health Score
-
-Tổng điểm tối đa: **12 điểm**
-
-```text
-Project Health Score =
-  Điểm tiến độ
-+ Điểm tỷ lệ issue đã đóng
-+ Điểm issue quá hạn
-+ Điểm bug còn mở
-+ Điểm effort
-+ Điểm issue không cập nhật lâu
-```
-
-### 5.9. Phân loại sức khỏe dự án
-
-| Tổng điểm | Trạng thái | Ý nghĩa |
-|---:|---|---|
-| 10 - 12 | Green | Dự án khỏe, đang được kiểm soát tốt |
-| 7 - 9 | Yellow | Có rủi ro, cần theo dõi sát |
-| 0 - 6 | Red | Dự án có vấn đề nghiêm trọng, cần hành động ngay |
-
-### 5.10. Gợi ý hành động theo trạng thái
-
-#### Green
-
-- Tiếp tục theo dõi định kỳ.
-- Giữ nhịp update issue.
-- Không cần escalation.
-
-#### Yellow
-
-- Review các issue quá hạn.
-- Kiểm tra lại estimate.
-- Ưu tiên xử lý bug đang mở.
-- Yêu cầu assignee update issue chưa cập nhật lâu.
-- Báo cáo rủi ro cho PM / BrSE / khách hàng nếu cần.
-
-#### Red
-
-- Tổ chức meeting review tình trạng dự án.
-- Xác định nguyên nhân chính: scope, effort, bug, resource hay estimate.
-- Re-plan schedule nếu cần.
-- Escalate sớm cho stakeholder.
-- Tập trung xử lý blocker và issue quá hạn.
-
-### 5.11. Lưu ý khi áp dụng
-
-- Không nên đánh giá sức khỏe dự án chỉ bằng một snapshot.
-- Nên theo dõi theo tuần để thấy xu hướng.
-- Cùng một điểm số nhưng xu hướng khác nhau sẽ có ý nghĩa khác nhau:
-  - Điểm 8 và đang tăng: tình hình tốt lên.
-  - Điểm 8 nhưng đang giảm: cần cảnh giác.
-- Redmine chỉ cung cấp dữ liệu, còn việc đánh giá phụ thuộc vào quy chuẩn của team.
-- Nên thống nhất cách tính với PM / BrSE / Leader trước khi dùng làm báo cáo chính thức.
-
-### 5.12. Template báo cáo ngắn
-
-```text
-Project Health: Green / Yellow / Red
-Score: X / 12
-
-Summary:
-- Progress:
-- Closed Rate:
-- Overdue:
-- Bug:
-- Effort:
-- Stale Issue:
-
-Main Risks:
-1.
-2.
-3.
-
-Actions:
-1.
-2.
-3.
-```
-
-### 5.13. Health Trend
-
-Ý nghĩa: theo dõi sự thay đổi sức khỏe dự án theo thời gian thay vì chỉ đánh giá tại một thời điểm.
-
-#### Dữ liệu cần lưu
-
-Mỗi lần import dữ liệu Redmine và tính health, hệ thống cần lưu lại snapshot:
-
-| Trường | Ý nghĩa |
+| Trường | Mô tả |
 |---|---|
-| Snapshot date | Ngày tính health |
-| Project ID / Project name | Dự án được đánh giá |
-| Health score | Tổng điểm |
-| Health status | Green / Yellow / Red |
-| Metric scores | Điểm từng chỉ số thành phần |
-| Main risk drivers | Các nguyên nhân chính tại thời điểm đó |
+| `total_open_issues` | Tổng open issue |
+| `aging_issue_count` | Số issue vượt ngưỡng warning |
+| `critical_aging_issue_count` | Số issue vượt ngưỡng critical |
+| `average_aging_days` | Aging trung bình |
+| `max_aging_days` | Aging lớn nhất |
+| `top_aging_issues` | Danh sách issue aging cao nhất |
 
-#### Cách đánh giá trend
+### 7.6. Drill-down
+
+| Trường | Mô tả |
+|---|---|
+| Issue ID | ID issue |
+| Subject | Tiêu đề issue |
+| Status | Trạng thái hiện tại |
+| Priority | Độ ưu tiên |
+| Assignee | Người phụ trách |
+| Created On | Ngày tạo |
+| Aging Days | Số ngày aging |
+| Risk Level | Good / Warning / Critical |
+
+### 7.7. Suggested Actions
+
+- Review trước các issue aging ở mức Critical.
+- Ưu tiên issue aging có priority cao.
+- Nếu aging tập trung ở một assignee thì kiểm tra blocker hoặc workload của người đó.
+
+---
+
+## 8. KPI 2: Assignee Overload
+
+### 8.1. Mục đích
+
+Phát hiện tình trạng workload mất cân bằng giữa các thành viên để PL/PM chủ động điều phối.
+
+### 8.2. Công thức chính
+
+MVP dùng `estimated_hours` làm nguồn chính thức để tính overload.
 
 ```text
-Health Trend = Score hiện tại - Score kỳ trước
+Assignee Workload Hours =
+  SUM(issues.estimated_hours)
+  WHERE issue là Open Issue
+  GROUP BY assigned_to_id
 ```
 
-| Điều kiện | Ý nghĩa |
+```text
+Workload Share (%) =
+  Assignee Workload Hours / Total Open Workload Hours của project * 100
+```
+
+### 8.3. Quy tắc fallback
+
+- Nếu issue không có `estimated_hours`, giá trị đó được xem là `0` trong phép cộng workload hours.
+- MVP **không fallback sang open issue count để chấm risk level**.
+- Open issue count chỉ được hiển thị như thông tin bổ sung trong drill-down.
+- Nếu tỷ lệ open issue thiếu `estimated_hours` lớn hơn hoặc bằng `30%`, dashboard phải hiển thị cảnh báo `Workload data may be incomplete`.
+
+Lý do: fallback từ giờ sang số lượng issue dễ làm thay đổi meaning của KPI và gây khó giải thích cho người dùng.
+
+### 8.4. Phân loại risk level
+
+Risk level của một assignee được lấy theo **mức cao hơn** giữa:
+
+1. Phân loại theo `Workload Hours`
+2. Phân loại theo `Workload Share`
+
+#### Theo Workload Hours
+
+| Điều kiện | Trạng thái |
 |---|---|
-| Health Trend > 0 | Dự án đang cải thiện |
-| Health Trend = 0 | Dự án ổn định |
-| Health Trend < 0 | Dự án đang xấu đi |
+| `< overload_warning_hours` | Good |
+| `>= overload_warning_hours` và `< overload_critical_hours` | Warning |
+| `>= overload_critical_hours` | Critical |
 
-#### Cảnh báo theo trend
+#### Theo Workload Share
 
-| Điều kiện | Mức cảnh báo |
+| Điều kiện | Trạng thái |
 |---|---|
-| Score giảm 2 kỳ liên tiếp | Warning |
-| Score giảm từ Green xuống Yellow | Warning |
-| Score giảm từ Yellow xuống Red | Critical |
-| Score <= 6 trong 2 kỳ liên tiếp | Critical |
+| `< overload_warning_share_pct` | Good |
+| `>= overload_warning_share_pct` và `< overload_critical_share_pct` | Warning |
+| `>= overload_critical_share_pct` | Critical |
 
-### 5.14. Root Cause Analysis
+### 8.5. Output
 
-Ý nghĩa: xác định nguyên nhân chính khiến Project Health thấp hoặc giảm.
+| Trường | Mô tả |
+|---|---|
+| `assignee` | Người phụ trách hoặc `Unassigned` |
+| `open_issue_count` | Số open issue |
+| `total_estimated_hours` | Tổng workload hours |
+| `workload_share_pct` | Tỷ lệ workload của assignee |
+| `high_priority_issue_count` | Số issue priority cao |
+| `overdue_issue_count` | Số issue quá hạn nếu có due date |
+| `risk_level` | Good / Warning / Critical |
+| `risk_reason` | Lý do bị gắn cờ theo hours hoặc share |
 
-Hệ thống cần phân tích các issue rủi ro theo:
+### 8.6. Drill-down
 
-- Assignee
-- Tracker
-- Tên issue (`Subject`) khi cần phân nhóm theo "module"
-- Target version
-- Priority
-- Issue overdue
-- Issue vượt effort
-- Issue không cập nhật lâu
-- Bug / Defect còn mở
+| Trường | Mô tả |
+|---|---|
+| Issue ID | ID issue |
+| Subject | Tiêu đề |
+| Status | Trạng thái hiện tại |
+| Priority | Độ ưu tiên |
+| Estimated Hours | Estimate |
+| Due Date | Deadline |
+| Aging Days | Số ngày aging |
+| Risk Reason | Lý do issue góp phần tạo overload |
 
-#### Output ví dụ
+### 8.7. Suggested Actions
+
+- Review lại phân bổ task cho assignee ở mức Critical.
+- Nếu assignee có nhiều issue priority cao hoặc overdue thì kiểm tra blocker trước.
+- Nếu workload share quá lệch thì cân nhắc phân phối lại task.
+
+---
+
+## 9. KPI 3: Reopen Rate
+
+### 9.1. Mục đích
+
+Đánh giá chất lượng xử lý issue thông qua tỷ lệ issue bị mở lại sau khi đã đóng.
+
+### 9.2. Điều kiện tính được KPI
+
+KPI này chỉ tính khi:
+
+- Có dữ liệu `journals`
+- Có dữ liệu `journal_details`
+- Có cấu hình `closed_status_ids`
+
+Nếu thiếu một trong các điều kiện trên thì hiển thị:
+
+```text
+Reopen Rate = N/A
+Reason = Reopen data unavailable
+```
+
+### 9.3. Time window
+
+Để phản ánh sức khỏe hiện tại thay vì toàn bộ lịch sử project, MVP chỉ tính trên **15 ngày gần nhất** tính từ `Calculation Date`.
+
+Có thể cấu hình lại bằng `reopen_window_days`.
+
+### 9.4. Logic xác định Reopened Issue
+
+Một issue được xem là reopened nếu trong cửa sổ thời gian tính toán có ít nhất một lần chuyển trạng thái:
+
+```text
+closed_status_id -> open_status_id
+```
+
+Tức là:
+
+```text
+journal_details.prop_key = 'status_id'
+AND old_value IN closed_status_ids
+AND value NOT IN closed_status_ids
+```
+
+### 9.5. Công thức
+
+```text
+Reopen Rate (%) =
+  Reopened Issue Count / Closed Issue Count * 100
+```
+
+Trong đó:
+
+- `Closed Issue Count` là số issue có ít nhất một lần chuyển sang closed status trong cửa sổ thời gian tính toán.
+- `Reopened Issue Count` là số issue trong tập trên có ít nhất một lần bị mở lại trong cùng cửa sổ thời gian.
+
+### 9.6. Quy tắc edge case
+
+- Một issue bị reopen nhiều lần vẫn chỉ tính là `1 reopened issue` trong mẫu số KPI.
+- Số lần reopen vẫn phải được lưu để hiển thị drill-down.
+- Nếu `Closed Issue Count = 0` thì `Reopen Rate = N/A`.
+
+### 9.7. Phân loại
+
+| Điều kiện | Trạng thái |
+|---|---|
+| `Reopen Rate < reopen_warning_pct` | Good |
+| `>= reopen_warning_pct` và `< reopen_critical_pct` | Warning |
+| `>= reopen_critical_pct` | Critical |
+
+### 9.8. Output
+
+| Trường | Mô tả |
+|---|---|
+| `closed_issue_count` | Số issue đã closed trong window |
+| `reopened_issue_count` | Số issue bị reopen trong window |
+| `reopen_rate_pct` | Tỷ lệ reopen |
+| `reopen_count_by_assignee` | Thống kê reopen theo assignee |
+| `reopen_count_by_tracker` | Thống kê reopen theo tracker |
+
+### 9.9. Drill-down
+
+| Trường | Mô tả |
+|---|---|
+| Issue ID | ID issue |
+| Subject | Tiêu đề |
+| Tracker | Loại issue |
+| Assignee | Người phụ trách |
+| Current Status | Trạng thái hiện tại |
+| Reopen Count | Số lần reopen |
+| Last Reopened Date | Ngày reopen gần nhất |
+| Previous Closed Status ID | Status closed ngay trước lần reopen gần nhất |
+| New Status ID | Status sau lần reopen gần nhất |
+
+### 9.10. Suggested Actions
+
+- Review nguyên nhân của các issue bị reopen.
+- Nếu reopen tập trung ở một tracker thì kiểm tra lại chất lượng xử lý của nhóm issue đó.
+- Nếu một issue bị reopen nhiều lần thì cần root-cause analysis.
+
+---
+
+## 10. Tích hợp vào dashboard
+
+### 10.1. Vai trò của KPI Pack
+
+KPI Pack là lớp giải thích bổ sung cho dashboard hiện tại.
+
+Nó không thay đổi định nghĩa `Project Health Score` tổng trong MVP.
+
+### 10.2. Cách hiển thị đề xuất
+
+```text
+Project Health: Yellow
+Existing Score: 7 / 12
+
+KPI Insights:
+- Ticket Aging: Critical - 8 issues aging >= 14 days
+- Assignee Overload: Warning - Assignee A has 165h and 45% workload share
+- Reopen Rate: Warning - 8.5% in last 15 days
+```
+
+Dashboard nên có thêm nút `Sync` để user chủ động đồng bộ lại dữ liệu trước khi xem KPI mới nhất.
+
+Yêu cầu cho nút `Sync` trong MVP:
+
+- Vị trí: góc trên bên phải khu vực header dashboard.
+- Mục đích: trigger đồng bộ lại dữ liệu issue từ nguồn hiện có về local DB trước khi tính lại KPI.
+- Sau khi sync xong, dashboard hiển thị lại `Last Updated`.
+- Nếu sync thất bại, hiển thị thông báo lỗi ngắn gọn cho user.
+
+Lưu ý: nút `Sync` chỉ trigger quy trình đồng bộ dữ liệu; không thay đổi phạm vi chức năng của KPI Pack.
+
+### 10.3. Main Risk Drivers
+
+Hệ thống sinh tối đa 3 risk drivers, mỗi driver gắn với đúng một KPI trong 3 KPI của tài liệu này.
+
+Ví dụ:
 
 ```text
 Main Risk Drivers:
-1. 40% overdue issues thuộc về assignee A
-2. 60% open bugs thuộc nhóm issue "Payment"
-3. 3 issues có Effort Ratio > 150%
-4. 12 issues chưa được cập nhật quá 7 ngày
+1. 8 open issues have aging >= 14 days.
+2. Assignee A owns 45% of open estimated workload.
+3. Reopen Rate is 8.5% in the last 15 days.
 ```
 
-#### Quy tắc chọn top risk drivers
+### 10.4. Suggested Actions
 
-- Ưu tiên metric có điểm thấp nhất.
-- Trong mỗi metric, lấy nhóm issue có tỷ trọng cao nhất.
-- Chỉ hiển thị tối đa top 3 đến top 5 risk drivers.
-- Mỗi risk driver cần có số lượng issue cụ thể và tỷ lệ phần trăm nếu tính được.
-
-### 5.15. Early Warning System
-
-Ý nghĩa: phát hiện rủi ro trước khi Project Health chuyển sang Red.
-
-| # | Điều kiện | Mức cảnh báo |
-|---|---|---|
-| 1 | Progress không tăng trong 5 ngày làm việc | Warning |
-| 2 | Overdue Rate tăng 2 kỳ liên tiếp | Warning |
-| 3 | Bug Rate tăng hơn 20% so với kỳ trước | Warning |
-| 4 | Effort Ratio vượt 120% | Critical |
-| 5 | Health Score giảm từ Green xuống Yellow | Warning |
-| 6 | Health Score giảm từ Yellow xuống Red | Critical |
-| 7 | Stale Rate vượt 15% | Warning |
-| 8 | Issue Priority High/Critical bị overdue | Critical |
-
-### 5.16. Smart Action Suggestion
-
-Ý nghĩa: hệ thống không chỉ báo dự án có vấn đề mà còn gợi ý hành động cụ thể.
-
-| Rủi ro | Hành động đề xuất |
-|---|---|
-| Overdue Rate cao | Review danh sách issue quá hạn, ưu tiên issue High/Critical |
-| Bug Rate cao | Tập trung fix bug theo nhóm issue/tracker có nhiều bug nhất |
-| Effort Ratio cao | Review lại estimate và scope của các issue vượt effort |
-| Stale Rate cao | Yêu cầu assignee cập nhật issue chưa update lâu |
-| Progress chậm | Re-plan schedule hoặc chia nhỏ issue lớn |
-| Một assignee có quá nhiều overdue | Review workload và cân nhắc hỗ trợ/reassign |
-
-#### Output ví dụ
+Ví dụ:
 
 ```text
 Suggested Actions:
-1. Review 8 overdue issues, trong đó có 2 issue Priority High.
-2. Ưu tiên xử lý nhóm issue "Payment" vì chiếm 60% open bugs.
-3. Yêu cầu assignee A cập nhật 5 stale issues.
-4. Review estimate cho 3 issues có Effort Ratio > 150%.
+1. Review critical aging issues first.
+2. Rebalance workload of Assignee A.
+3. Analyze reopened issues to identify quality gaps.
 ```
 
-### 5.17. Configurable Scoring Engine
+---
 
-Ý nghĩa: mỗi team/project có quy ước Redmine khác nhau, nên hệ thống cần cho phép cấu hình.
+## 11. Yêu cầu phi chức năng
 
-| Nhóm cấu hình | Nội dung |
-|---|---|
-| Closed status | Status nào được xem là đã đóng |
-| Bug tracker | Tracker nào được xem là Bug/Defect |
-| Stale threshold | Số ngày không update để xem là stale |
-| Overdue threshold | Ngưỡng overdue để phân loại điểm |
-| Effort threshold | Ngưỡng effort vượt estimate |
-| Metric weight | Trọng số từng chỉ số, nhưng điểm cuối vẫn phải chuẩn hóa về thang 12 |
-| Health status threshold | Ngưỡng Green / Yellow / Red trên thang 12 |
+| # | Danh mục | Yêu cầu |
+|---|---|---|
+| 1 | Hiệu năng | Tính 3 KPI cho tối thiểu 5.000 issue của một project trong vòng 10 giây |
+| 2 | Bảo mật | Không hiển thị issue ngoài phạm vi quyền truy cập của user |
+| 3 | Tính sẵn sàng | Nếu thiếu dữ liệu history thì chỉ `Reopen Rate` là `N/A`; hai KPI còn lại vẫn hoạt động |
+| 4 | Quan sát | Ghi log `project_id`, số issue xử lý, thời gian tính KPI và lỗi dữ liệu |
+| 5 | Cấu hình | Cho phép thay đổi thresholds và `closed_status_ids` |
+| 6 | Mở rộng | Thiết kế theo hướng có thể thêm KPI mới sau MVP |
 
-#### Quy tắc mặc định
+---
 
-- Closed issue mặc định: issue có `status_id = 3` hoặc `status_id = 5`.
-- Bug issue: `Tracker = Bug` hoặc `Tracker = Defect`.
-- Stale issue: issue chưa đóng và không update quá 7 ngày.
-- Module mặc định: dùng `Subject` làm nhãn nhóm khi cần phân tích theo "module".
-- Score mặc định: 6 metric, mỗi metric tối đa 2 điểm, tổng tối đa 12 điểm.
-- Nếu metric không đủ dữ liệu để tính hợp lệ, metric đó nhận `score = 0`.
-- Weight mặc định cho MVP là cấu hình global, áp dụng chung cho toàn hệ thống cho đến khi có cấu hình riêng theo project.
+## 12. Tiêu chí chấp nhận
 
-#### Weight mặc định cho MVP
+| # | ID | Mô tả | Loại kiểm thử |
+|---|---|---|---|
+| 1 | KPI-AC-001/v2 | Tính được `Ticket Aging` cho open issue dựa trên `created_on` | Unit test |
+| 2 | KPI-AC-002/v2 | Phân loại `Ticket Aging` thành Good / Warning / Critical theo cấu hình | Unit test |
+| 3 | KPI-AC-003/v2 | Hiển thị được top aging issues trên dashboard hoặc drill-down | UI test |
+| 4 | KPI-AC-004/v2 | Tính được workload theo assignee bằng tổng `estimated_hours` của open issue | Unit test |
+| 5 | KPI-AC-005/v2 | Tính được `workload_share_pct` theo assignee | Unit test |
+| 6 | KPI-AC-006/v2 | Risk level của assignee lấy theo mức cao hơn giữa `hours` và `share` | Unit test |
+| 7 | KPI-AC-007/v2 | Nếu tỷ lệ open issue thiếu estimate >= 30% thì hiển thị data quality warning | Unit / UI test |
+| 8 | KPI-AC-008/v2 | Hiển thị được drill-down issue của assignee overload | UI test |
+| 9 | KPI-AC-009/v2 | Xác định được reopened issue từ lịch sử closed -> open trong time window | Unit / Integration test |
+| 10 | KPI-AC-010/v2 | Tính được `Reopen Rate` theo công thức `reopened / closed` trong time window | Unit test |
+| 11 | KPI-AC-011/v2 | Nếu thiếu `journals` hoặc `journal_details` thì `Reopen Rate = N/A` | Integration test |
+| 12 | KPI-AC-012/v2 | Hiển thị được drill-down issue reopen kèm `reopen_count` và `last_reopened_date` | UI test |
+| 13 | KPI-AC-013/v2 | Sinh được tối đa 3 `Main Risk Drivers` từ đúng 3 KPI của tài liệu này | Unit / UI test |
+| 14 | KPI-AC-014/v2 | Sinh được `Suggested Actions` tương ứng với KPI có rủi ro | Unit / UI test |
+| 15 | KPI-AC-015/v2 | Dashboard hiển thị đủ 3 KPI trong phạm vi project hiện tại | UI test |
 
-| Metric | Weight mặc định |
-|---|---:|
-| Progress Score | 1 |
-| Closed Rate Score | 1 |
-| Overdue Score | 1 |
-| Bug Score | 1 |
-| Effort Score | 1 |
-| Stale Score | 1 |
+---
 
-Với cấu hình mặc định, tất cả metric có trọng số như nhau.
+## 13. Luồng xử lý
 
-#### Công thức có trọng số tùy chọn
+### 13.1. Luồng bình thường
 
-```text
-Weighted Raw Score =
-  Progress Score * Progress Weight
-+ Closed Rate Score * Closed Rate Weight
-+ Overdue Score * Overdue Weight
-+ Bug Score * Bug Weight
-+ Effort Score * Effort Weight
-+ Stale Score * Stale Weight
+1. User mở dashboard của project hiện tại.
+2. Hệ thống lấy issue của project từ local DB.
+3. Hệ thống xác định `Open Issue` và `Closed Issue` dựa trên `closed_status_ids`.
+4. Hệ thống tính:
+   - Ticket Aging
+   - Assignee Overload
+   - Reopen Rate nếu có đủ history
+5. Hệ thống hiển thị KPI summary.
+6. Hệ thống sinh `Main Risk Drivers` và `Suggested Actions`.
+7. User click vào KPI để xem drill-down.
 
-Max Weighted Raw Score =
-  2 * (Progress Weight + Closed Rate Weight + Overdue Weight + Bug Weight + Effort Weight + Stale Weight)
+### 13.2. Luồng lỗi / thiếu dữ liệu
 
-Weighted Health Score (thang 12) =
-  (Weighted Raw Score / Max Weighted Raw Score) * 12
-```
+1. Nếu không có issue nào trong project, hiển thị `No issue data`.
+2. Nếu thiếu `journals` hoặc `journal_details`, `Reopen Rate` hiển thị `N/A`.
+3. Nếu thiếu estimate ở nhiều open issue, hiển thị cảnh báo data quality cho `Assignee Overload`.
+4. Nếu chưa cấu hình được `closed_status_ids`, hệ thống dùng giá trị mặc định và ghi warning log.
 
-Nếu chưa cấu hình weight, hệ thống dùng bộ weight mặc định ở trên và công thức mặc định tổng 12 điểm.
-Nếu có cấu hình weight, kết quả vẫn phải được chuẩn hóa về thang 12 để giữ nguyên quy tắc phân loại Green / Yellow / Red.
+---
 
-### 5.18. Chế độ MVP
+## 14. Edge cases
 
-- MVP chỉ hỗ trợ **single-project dashboard**.
-- Người dùng chọn một project để xem health, trend, risk drivers, warnings và suggested actions.
-- Không triển khai dashboard tổng hợp nhiều dự án trong MVP.
-- Các AC, wireframe và drill-down phải được hiểu theo phạm vi một dự án.
+1. Issue không có assignee được nhóm vào `Unassigned`.
+2. Issue không có `estimated_hours` được tính là `0h`.
+3. Issue bị reopen nhiều lần chỉ tính là 1 reopened issue trong KPI, nhưng vẫn lưu `reopen_count`.
+4. `Closed Issue Count = 0` thì `Reopen Rate = N/A`.
+5. Project có rất ít issue thì KPI vẫn tính nhưng cần tránh diễn giải quá mạnh ở UI.
 
-### 5.19. Drill-down
+---
 
-Ý nghĩa: từ dashboard tổng quan có thể xem danh sách issue gây rủi ro.
+## 15. Quyết định đã chốt
 
-- Click Overdue → xem danh sách issue quá hạn.
-- Click Bug Rate → xem danh sách bug/defect còn mở.
-- Click Effort Ratio → xem issue vượt estimate.
-- Click Stale Rate → xem issue chưa update lâu.
-- Click Assignee → xem risk theo từng người phụ trách.
-- Click Target version → xem risk theo version/milestone.
+| ID | Nội dung | Quyết định |
+|---|---|---|
+| D-1 | Closed status mặc định cho KPI Pack | `closed_status_ids = [3, 4, 5]` |
+| D-2 | Dữ liệu cho Reopen Rate | Trong phase MVP này phải bổ sung sync `journals` và `journal_details` |
+| D-3 | Ngưỡng overload theo giờ | `overload_warning_hours = 160`, `overload_critical_hours = 200` |
+| D-4 | Cửa sổ tính Reopen Rate | `reopen_window_days = 15` |
 
-| Trường | Ý nghĩa |
-|---|---|
-| Issue ID | ID issue Redmine |
-| Subject | Tiêu đề issue |
-| Tracker | Loại issue |
-| Status | Trạng thái |
-| Priority | Độ ưu tiên |
-| Assignee | Người phụ trách |
-| Due date | Deadline |
-| % Done | Tiến độ |
-| Estimated hours | Estimate |
-| Spent hours | Thực tế |
-| Updated | Ngày cập nhật cuối |
-| Risk reason | Lý do issue bị xem là rủi ro |
+---
 
+## 16. Rủi ro
 
-## 6. Yêu cầu phi chức năng
+| # | Rủi ro | Khả năng | Ảnh hưởng | Giảm thiểu |
+|---|---|---|---|---|
+| 1 | Thiếu history status khiến Reopen Rate không tính được | Trung bình | Cao | Cho phép `N/A` và hiển thị warning |
+| 2 | `estimated_hours` nhập thiếu làm KPI overload thiếu chính xác | Cao | Trung bình | Gắn data quality warning khi thiếu estimate nhiều |
+| 3 | Closed status khác nhau giữa các project | Trung bình | Cao | Dùng config theo `status_id` |
+| 4 | KPI bị hiểu nhầm thành đánh giá cá nhân | Trung bình | Cao | Ghi rõ mục tiêu là hỗ trợ điều phối, không xếp hạng nhân sự |
 
-| #   | Danh mục          | Yêu cầu |
-| --- | ----------------- | ------- |
-| 1   | Hiệu năng         | Tính toán trên dữ liệu DB local của một dự án, tối thiểu 5.000 issue trong vòng 10 giây đối với file CSV/Excel thông thường |
-| 2   | Bảo mật           | Không lưu mật khẩu Redmine; nếu tích hợp API thì token phải được mã hóa hoặc lưu bằng cơ chế bảo mật của hệ thống |
-| 3   | Tính sẵn sàng     | Nếu import file lỗi, hệ thống phải hiển thị thông báo lỗi rõ ràng và không làm mất dữ liệu snapshot cũ |
-| 4   | Khả năng quan sát | Theo dõi theo tuần để thấy xu hướng; lưu log import, thời điểm tính score và lỗi validate dữ liệu |
-| 5   | Khả năng cấu hình | Cho phép cấu hình status closed, tracker bug, threshold, weight và ngưỡng Green/Yellow/Red |
-| 6   | Tính dễ sử dụng   | Dashboard cần hiển thị health, trend, main risks và suggested actions trong một màn hình chính |
+---
 
-## 7. Tiêu chí chấp nhận
+## 17. Wireframe ASCII
 
-| #   | ID                | Mô tả | Loại kiểm thử |
-| --- | ----------------- | ----- | ------------- |
-| 1   | HEALTH-AC-001/v1 | Tính được Planned Progress, Actual Progress và Schedule Gap từ dữ liệu Redmine | Unit test |
-| 2   | HEALTH-AC-002/v1 | Chấm điểm tiến độ so với deadline theo điều kiện đã định nghĩa | Unit test |
-| 3   | HEALTH-AC-003/v1 | Tính được Closed Rate và chấm điểm theo điều kiện đã định nghĩa | Unit test |
-| 4   | HEALTH-AC-004/v1 | Tính được Overdue Rate từ issue chưa đóng có Due date nhỏ hơn ngày hiện tại và chấm điểm theo điều kiện đã định nghĩa | Unit test |
-| 5   | HEALTH-AC-005/v1 | Tính được Open Bug Rate với bug xác định bằng `Tracker = Bug` hoặc `Tracker = Defect` và chấm điểm theo điều kiện đã định nghĩa | Unit test |
-| 6   | HEALTH-AC-006/v1 | Tính được Effort Ratio và chấm điểm theo điều kiện đã định nghĩa | Unit test |
-| 7   | HEALTH-AC-007/v1 | Tính được Stale Rate với issue chưa đóng và `Updated` quá 7 ngày, sau đó chấm điểm theo điều kiện đã định nghĩa | Unit test |
-| 8   | HEALTH-AC-008/v1 | Tính Project Health Score bằng tổng 6 điểm thành phần, tối đa 12 điểm | Unit test |
-| 9   | HEALTH-AC-009/v1 | Phân loại Project Health thành Green, Yellow hoặc Red theo tổng điểm | Unit test |
-| 10  | HEALTH-AC-010/v1 | Hiển thị hoặc xuất được template báo cáo ngắn gồm Project Health, Score, Summary, Main Risks và Actions | UI / Export test |
-| 11  | HEALTH-AC-011/v1 | Lưu được snapshot health theo ngày/tuần để tính Health Trend | Integration test |
-| 12  | HEALTH-AC-012/v1 | Hiển thị được Health Trend tăng/giảm/không đổi so với kỳ trước | UI test |
-| 13  | HEALTH-AC-013/v1 | Xác định được top 3 risk drivers dựa trên metric có điểm thấp và nhóm issue liên quan | Unit / Integration test |
-| 14  | HEALTH-AC-014/v1 | Phát hiện được cảnh báo sớm theo các rule đã định nghĩa | Unit test |
-| 15  | HEALTH-AC-015/v1 | Sinh được Suggested Actions dựa trên loại rủi ro phát hiện được | Unit / UI test |
-| 16  | HEALTH-AC-016/v1 | Cho phép cấu hình closed status, bug tracker, threshold và metric weight; nếu có weight thì score vẫn được chuẩn hóa về thang 12 | UI / Integration test |
-| 17  | HEALTH-AC-017/v1 | Hiển thị được dashboard một dự án với health, trend, main risk và last updated | UI test |
-| 18  | HEALTH-AC-018/v1 | Cho phép drill-down từ metric rủi ro đến danh sách issue liên quan | UI / Integration test |
-
-## 8. Ví dụ
-
-### Các luồng bình thường
-
-1. Dữ liệu issue đã được đồng bộ từ Redmine về DB local.
-2. Tính các chỉ số: Progress, Closed Rate, Overdue, Bug, Effort, Stale Issue.
-3. Cộng điểm các chỉ số để tính Project Health Score.
-4. Phân loại Project Health theo Green / Yellow / Red.
-5. Điền kết quả vào template báo cáo ngắn.
-
-Ví dụ dữ liệu:
-
-| Chỉ số | Kết quả | Điểm |
-|---|---:|---:|
-| Tiến độ thực tế chậm hơn kế hoạch 5% | Warning | 1 |
-| Closed Rate = 70% | Warning | 1 |
-| Overdue Rate = 8% | Warning | 1 |
-| Open Bug Rate = 12% | Warning | 1 |
-| Effort Ratio = 110% | Warning | 1 |
-| Stale Rate = 4% | Good | 2 |
-
-```text
-Project Health Score = 1 + 1 + 1 + 1 + 1 + 2 = 7
-```
-
-Kết luận:
-
-```text
-Health = Yellow
-```
-
-Dự án chưa đến mức nguy hiểm, nhưng có nhiều dấu hiệu cần theo dõi.
-
-### Các luồng lỗi
-
-1. Nếu `Estimated hours` bị thiếu nhiều, chỉ số Effort Ratio không đáng tin cậy và cần hiển thị cảnh báo dữ liệu thiếu.
-2. Nếu file import thiếu cột bắt buộc, hệ thống phải báo rõ tên cột bị thiếu.
-3. Nếu dữ liệu ngày không đúng format, hệ thống bỏ qua dòng lỗi và ghi vào import log.
-4. Nếu không có issue nào, các metric không tính được sẽ nhận `score = 0`, đồng thời hệ thống phải hiển thị cảnh báo dữ liệu không đủ.
-5. Nếu không có dữ liệu kỳ trước, hệ thống không tính trend và hiển thị `No previous snapshot`.
-
-### Các trường hợp biên
-
-1. Cùng một điểm số nhưng xu hướng khác nhau sẽ có ý nghĩa khác nhau:
-   - Điểm 8 và đang tăng: tình hình tốt lên.
-   - Điểm 8 nhưng đang giảm: cần cảnh giác.
-2. Issue không có Due date: không tính vào overdue; nếu toàn bộ dữ liệu cần cho metric overdue không đủ thì metric overdue nhận `score = 0`.
-3. Issue không có Estimated hours: không tính vào Effort Ratio; nếu không đủ dữ liệu để tính effort hợp lệ thì metric effort nhận `score = 0`.
-4. Project mới bắt đầu: Planned Progress có thể rất thấp, cần tránh chia cho 0 khi Start date = Due date.
-5. Project đã quá Due date: Planned Progress được giới hạn tối đa 100%.
-6. Issue đã đóng nhưng % Done chưa đạt 100%: ưu tiên status closed để xác định hoàn thành.
-
-## 9. Wireframe ASCII (Updated)
-
-### 9.1. Dashboard chính (Single Project)
+### 17.1. KPI Dashboard
 
 ```text
 +------------------------------------------------------+
 | Project Health Analyzer                              |
 +------------------------------------------------------+
-| Project: [Project A ▼]     Last Updated: 2026-05-05   |
+| Project: [Current Project]   Last Updated: 2026-05-06 |
+|                                         [Sync]       |
 +------------------------------------------------------+
-| HEALTH STATUS                                        |
-|                                                      |
-|        YELLOW             Score: 7 / 12              |
-|        Trend: -2 (↓)      Risk Level: Medium         |
+| Project Health: YELLOW       Existing Score: 7 / 12  |
 +------------------------------------------------------+
-
-+--------------------+-------------------------------+
-| Metrics            | Detail                        |
-+--------------------+-------------------------------+
-| Progress           | 55% / Planned 60%   [1/2]     |
-| Closed Rate        | 70%                [1/2]      |
-| Overdue            | 8 issues           [1/2]      |
-| Bug Rate           | 12%                [1/2]      |
-| Effort             | 110%               [1/2]      |
-| Stale Issue        | 4%                 [2/2]      |
-+------------------------------------------------------+
-
-+------------------------------------------------------+
-| Health Trend                                         |
-|                                                      |
-| Week-3: 9 (Green)                                    |
-| Week-2: 8 (Green)                                    |
-| Week-1: 7 (Yellow) ↓                                 |
-+------------------------------------------------------+
-
+| KPI Insights                                         |
++----------------------+--------------+----------------+
+| KPI                  | Status       | Summary        |
++----------------------+--------------+----------------+
+| Ticket Aging         | Critical     | 8 issues >=14d |
+| Assignee Overload    | Warning      | A: 165h / 45%  |
+| Reopen Rate          | Warning      | 8.5% / 15d     |
 +------------------------------------------------------+
 | Main Risk Drivers                                    |
-|                                                      |
-| 1. 8 overdue issues (2 High priority)                |
-| 2. 60% bugs thuộc nhóm issue "Payment"             |
-| 3. 3 issues Effort Ratio > 150%                      |
-+------------------------------------------------------+
-
+| 1. 8 open issues have aging >= 14 days               |
+| 2. Assignee A owns 45% of open workload              |
+| 3. Reopen Rate is 8.5% in last 15 days               |
 +------------------------------------------------------+
 | Suggested Actions                                    |
-|                                                      |
-| • Review overdue High/Critical issues                |
-| • Fix bugs trong nhóm issue "Payment" trước          |
-| • Ask A update 5 stale issues                        |
-+------------------------------------------------------+
-
-+------------------------------------------------------+
-| Early Warnings                                       |
-|                                                      |
-| - Progress không tăng trong 5 ngày                   |
-| - Overdue tăng từ 5 → 8                              |
-| - 2 issue Critical đang overdue                      |
+| 1. Review critical aging issues                      |
+| 2. Rebalance workload of Assignee A                  |
+| 3. Analyze reopened issues                           |
 +------------------------------------------------------+
 ```
 
-### 9.2. Drill-down: Overdue Issues
+### 17.2. Ticket Aging Drill-down
 
 ```text
 +------------------------------------------------------+
-| Overdue Issues (8)                                   |
+| Ticket Aging Detail                                  |
 +------------------------------------------------------+
-| ID   | Subject       | Priority | Assignee | Due     |
-|------|--------------|----------|----------|---------|
-| 101  | Login bug     | High     | A        | 05-01   |
-| 108  | API timeout   | Critical | B        | 05-02   |
-| 115  | UI fix        | Medium   | A        | 05-03   |
+| ID   | Subject       | Status | Assignee | Aging | Risk |
+|------|---------------|--------|----------|-------|------|
+| 101  | API timeout   | Doing  | A        | 18d   | Crit |
+| 115  | UI fix        | New    | B        | 15d   | Crit |
+| 120  | Batch error   | Review | A        | 9d    | Warn |
 +------------------------------------------------------+
-
-[Filter: Assignee ▼] [Priority ▼] [Tracker ▼]
 ```
 
-### 9.3. Drill-down: Bug Analysis
+### 17.3. Assignee Overload Drill-down
 
 ```text
 +------------------------------------------------------+
-| Bug Analysis                                         |
+| Assignee Workload                                    |
 +------------------------------------------------------+
-| Module        | Bug Count | %                         |
-|---------------|-----------|--------------------------|
-| Payment       | 12        | 60%                       |
-| Auth          | 5         | 25%                       |
-| Dashboard     | 3         | 15%                       |
+| Assignee | Open Issues | Est. Hours | Share | Risk   |
+|----------|-------------|------------|-------|--------|
+| A        | 14          | 165h       | 45%   | Warning|
+| B        | 6           | 35h        | 17%   | Good   |
+| C        | 5           | 28h        | 13%   | Good   |
 +------------------------------------------------------+
 ```
 
-### Ghi chú
+### 17.4. Reopen Rate Drill-down
 
-- Focus 1 project duy nhất
-- UI flow: Health → Metrics → Trend → Risk → Action
-- Dashboard phải hiển thị đầy đủ insight trong 1 màn hình
-- Drill-down giúp truy ra issue cụ thể gây rủi ro
-
-
-## 10. Trạng thái quyết định / Vấn đề mở
-
-| #    | Nội dung | Trạng thái | Ghi chú |
-| ---- | -------- | ---------- | ------- |
-| OI-1 | Ticket ID, ngày tạo và giai đoạn của spec | Open | Chỉ là metadata tài liệu, không chặn logic MVP |
-| OI-2 | Nguồn dữ liệu MVP | Closed | MVP chỉ sử dụng dữ liệu đã được đồng bộ từ Redmine về DB local và đọc trực tiếp từ DB |
-| OI-3 | Danh sách status được xem là closed mặc định | Closed | Mặc định dùng `status_id = 3` hoặc `status_id = 5` |
-| OI-4 | Ngưỡng Green/Yellow/Red và weight metric dùng mặc định hay theo từng project | Closed | MVP dùng cấu hình global; weight mặc định của 6 metric đều bằng `1`, score luôn chuẩn hóa về thang 12 |
-| OI-5 | Quy ước "module" trong MVP | Closed | Tạm dùng tên issue (`Subject`) làm nhãn nhóm khi cần phân tích theo "module" |
-| OI-6 | Lưu snapshot vào DB hay chỉ export báo cáo | Closed | MVP có lưu snapshot vào DB để hỗ trợ trend, warning và history |
-| OI-7 | Có cần quyền Admin/Viewer cho cấu hình scoring không | Deferred | Có thể để phase sau nếu MVP nội bộ chưa cần phân quyền sâu |
-
-## 11. Rủi ro
-
-| #   | Rủi ro | Khả năng xảy ra | Mức độ ảnh hưởng | Biện pháp giảm thiểu |
-| --- | ------ | --------------- | ---------------- | -------------------- |
-| 1   | Nếu `Estimated hours` bị thiếu nhiều, chỉ số Effort Ratio không đáng tin cậy | Trung bình | Cao | Hiển thị cảnh báo data quality và cho phép bỏ qua metric effort nếu thiếu dữ liệu nhiều |
-| 2   | Đánh giá sức khỏe dự án chỉ bằng một snapshot có thể không phản ánh xu hướng | Cao | Cao | Lưu snapshot theo tuần để tính trend |
-| 3   | Redmine chỉ cung cấp dữ liệu, còn việc đánh giá phụ thuộc vào quy chuẩn của team | Cao | Trung bình | Cho phép cấu hình threshold, weight, closed status và bug tracker |
-| 4   | Công thức quá cứng khiến không phù hợp nhiều loại dự án | Trung bình | Cao | Xây dựng Configurable Scoring Engine |
-| 5   | Suggested Actions quá chung chung, không tạo giá trị khi demo | Trung bình | Cao | Mapping action theo từng risk driver và hiển thị issue cụ thể |
-| 6   | Dữ liệu Redmine không đầy đủ hoặc không đồng nhất giữa các project | Cao | Cao | Validate dữ liệu import, báo thiếu cột, báo tỷ lệ thiếu field quan trọng |
-| 7   | User hiểu sai score là kết luận tuyệt đối | Trung bình | Trung bình | Hiển thị ghi chú score là chỉ báo hỗ trợ quyết định, không thay thế PM judgment |
-
----
-
-## Bảng truy vết
-
-| #   | AC                | Màn hình/API | DB | Logs | Quyền | Loại kiểm thử |
-| --- | ----------------- | ------------ | --- | ---- | ----- | ------------- |
-| 1   | HEALTH-AC-001/v1 | Sync DB / Calculation API | Không bắt buộc nếu MVP dùng file; cần DB nếu lưu snapshot | Import log | Viewer | Unit test |
-| 2   | HEALTH-AC-002/v1 | Calculation API | Không bắt buộc | Calculation log | Viewer | Unit test |
-| 3   | HEALTH-AC-003/v1 | Calculation API | Không bắt buộc | Calculation log | Viewer | Unit test |
-| 4   | HEALTH-AC-004/v1 | Calculation API / Drill-down | Không bắt buộc | Calculation log | Viewer | Unit test |
-| 5   | HEALTH-AC-005/v1 | Calculation API / Drill-down | Không bắt buộc | Calculation log | Viewer | Unit test |
-| 6   | HEALTH-AC-006/v1 | Calculation API / Drill-down | Không bắt buộc | Calculation log | Viewer | Unit test |
-| 7   | HEALTH-AC-007/v1 | Calculation API / Drill-down | Không bắt buộc | Calculation log | Viewer | Unit test |
-| 8   | HEALTH-AC-008/v1 | Dashboard / Calculation API | Snapshot table nếu lưu history | Calculation log | Viewer | Unit test |
-| 9   | HEALTH-AC-009/v1 | Dashboard | Snapshot table nếu lưu history | Calculation log | Viewer | Unit test |
-| 10  | HEALTH-AC-010/v1 | Report screen / Export | Report history nếu cần | Export log | Viewer | UI / Export test |
-| 11  | HEALTH-AC-011/v1 | Snapshot API | Health snapshot table | Snapshot log | Viewer | Integration test |
-| 12  | HEALTH-AC-012/v1 | Dashboard Trend | Health snapshot table | Calculation log | Viewer | UI test |
-| 13  | HEALTH-AC-013/v1 | Risk Driver panel | Issue snapshot / Risk summary table nếu lưu | Risk analysis log | Viewer | Unit / Integration test |
-| 14  | HEALTH-AC-014/v1 | Warning panel | Warning table nếu lưu | Warning log | Viewer | Unit test |
-| 15  | HEALTH-AC-015/v1 | Suggested Actions panel | Action suggestion table nếu lưu | Suggestion log | Viewer | Unit / UI test |
-| 16  | HEALTH-AC-016/v1 | Configuration screen | Config table | Config change log | Admin | UI / Integration test |
-| 17  | HEALTH-AC-017/v1 | Project Dashboard | Health snapshot table | Dashboard log | Viewer | UI test |
-| 18  | HEALTH-AC-018/v1 | Drill-down screen | Issue snapshot table nếu lưu | Drill-down query log | Viewer | UI / Integration test |
+```text
++------------------------------------------------------+
+| Reopen Issues                                        |
++------------------------------------------------------+
+| ID   | Subject       | Assignee | Reopen | Last Reopen |
+|------|---------------|----------|--------|-------------|
+| 201  | Payment bug   | A        | 2      | 2026-05-01  |
+| 208  | Login issue   | B        | 1      | 2026-05-02  |
++------------------------------------------------------+
+```

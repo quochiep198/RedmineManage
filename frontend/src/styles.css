@@ -636,16 +636,6 @@ select {
   margin-top: 20px;
 }
 
-.dashboard-db-status {
-  align-self: center;
-  border-radius: 999px;
-  background: #e2e8f0;
-  color: #0f172a;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
 .dashboard-chart-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -682,6 +672,11 @@ select {
 .dashboard-health-stat strong {
   font-size: 28px;
   color: #0f172a;
+}
+
+.stat-card-datetime {
+  font-size: 18px !important;
+  line-height: 1.5;
 }
 
 .health-badge {
@@ -841,6 +836,108 @@ select {
   border-radius: 14px;
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.trend-chart-wrap {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.trend-bar-chart {
+  display: flex;
+  justify-content: flex-start;
+  align-items: end;
+  gap: 14px;
+  min-height: 220px;
+  padding: 20px 16px 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6f3 100%);
+  border: 1px solid #dbe7e1;
+  overflow-x: auto;
+}
+
+.trend-bar-col {
+  min-width: 52px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  align-items: end;
+}
+
+.trend-bar-track {
+  width: 36px;
+  height: 150px;
+  border-radius: 14px;
+  background: #e2e8f0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: end;
+}
+
+.trend-bar-hitbox {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: end;
+}
+
+.trend-bar {
+  width: 100%;
+  border-radius: 14px 14px 0 0;
+  transition: height 0.2s ease;
+}
+
+.trend-bar.green {
+  background: linear-gradient(180deg, #4ade80 0%, #16a34a 100%);
+}
+
+.trend-bar.yellow {
+  background: linear-gradient(180deg, #facc15 0%, #f59e0b 100%);
+}
+
+.trend-bar.red {
+  background: linear-gradient(180deg, #fb7185 0%, #dc2626 100%);
+}
+
+.trend-bar-label {
+  color: #64748b;
+  font-size: 12px;
+  flex: 1 0 auto;
+  text-align: center;
+}
+
+.trend-bar-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+  min-width: 128px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 2;
+}
+
+.trend-bar-tooltip strong {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.trend-bar-hitbox:hover .trend-bar-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .dashboard-chart-panel {

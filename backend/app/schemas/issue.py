@@ -47,6 +47,7 @@ class IssueSyncResponse(BaseModel):
     total_synced: int
     created: int
     updated: int
+    deleted: int
     synced_at: datetime
 
 

@@ -136,18 +136,18 @@ export default function IssuesPage({ initialPreset, onClearPreset }) {
 
   return (
     <section className="panel issues-panel">
-      <div className="section-heading">
+      {/* <div className="section-heading">
         <div>
           <p className="eyebrow">Dashboard</p>
           <h2>Issues</h2>
         </div>
-      </div>
+      </div> */}
 
-      {activePresetTitle ? (
+      {/* {activePresetTitle ? (
         <div className="dashboard-note">
           <strong>Drill-down:</strong> {activePresetTitle}
         </div>
-      ) : null}
+      ) : null} */}
 
       <div className="issues-filter-grid">
         <label className="field-label">
@@ -163,11 +163,9 @@ export default function IssuesPage({ initialPreset, onClearPreset }) {
           Risk type
           <select name="risk_type" value={filters.risk_type} onChange={handleFilterChange}>
             <option value="">All risks</option>
-            <option value="overdue">Overdue</option>
-            <option value="bug">Bug</option>
-            <option value="effort">Effort</option>
-            <option value="stale">Stale</option>
-            <option value="progress">Progress</option>
+            <option value="aging">Ticket Aging</option>
+            <option value="overload">Assignee Overload</option>
+            <option value="reopen">Reopen Rate</option>
           </select>
         </label>
         <label className="field-label">

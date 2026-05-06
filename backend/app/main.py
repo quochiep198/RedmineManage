@@ -9,6 +9,7 @@ from app.db.session import AsyncSessionLocal, engine
 from app.models.dashboard_health_config import DashboardHealthConfig
 from app.models.dashboard_health_snapshot import DashboardHealthSnapshot
 from app.models.issue import Issue
+from app.models.issue_status_transition import IssueStatusTransition
 from app.models.issue_sync_log import IssueSyncLog
 from app.models.project import Project
 from app.models.project_sync_log import ProjectSyncLog

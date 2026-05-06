@@ -1,15 +1,16 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 
 from app.core.config import settings
 from app.core.crypto import decrypt_secret
 from app.db.session import AsyncSessionLocal
 from app.middleware.auth import get_current_user, require_admin
 from app.models.issue import Issue
+from app.models.issue_status_transition import IssueStatusTransition
 from app.models.issue_sync_log import IssueSyncLog
 from app.models.project import Project
 from app.models.redmine_connection import RedmineConnection
@@ -22,7 +23,7 @@ from app.schemas.issue import (
     IssueSyncResponse,
     IssueSyncStatusResponse,
 )
-from app.services.redmine_client import build_redmine_issue_url, fetch_redmine_issues
+from app.services.redmine_client import build_redmine_issue_url, fetch_redmine_issue_detail, fetch_redmine_issues
 from app.services.dashboard_health import get_health_config, persist_health_snapshot
 
 router = APIRouter()
@@ -70,6 +71,65 @@ def derive_is_closed(item: dict) -> bool:
     status = item.get("status") or {}
     status_id = status.get("id")
     return status_id in set(settings.closed_status_ids)
+
+
+def open_issue_clause(closed_status_ids: set[int]):
+    return or_(Issue.status_id.is_(None), ~Issue.status_id.in_(closed_status_ids))
+
+
+def closed_issue_clause(closed_status_ids: set[int]):
+    return Issue.status_id.in_(closed_status_ids)
+
+
+def extract_status_transitions(payload: dict, issue_db_id: int, connection_id: int, project_id: int) -> list[IssueStatusTransition]:
+    issue_data = payload.get("issue") or {}
+    redmine_issue_id = int(issue_data.get("id") or 0)
+    transitions: list[IssueStatusTransition] = []
+
+    for journal in issue_data.get("journals") or []:
+        changed_on = parse_optional_datetime(journal.get("created_on"))
+        if changed_on is None:
+            continue
+        for detail in journal.get("details") or []:
+            if detail.get("property") != "attr" or detail.get("name") != "status_id":
+                continue
+            old_value = detail.get("old_value")
+            new_value = detail.get("new_value")
+            if old_value is None or new_value is None:
+                continue
+            try:
+                from_status_id = int(old_value)
+                to_status_id = int(new_value)
+            except (TypeError, ValueError):
+                continue
+            transitions.append(
+                IssueStatusTransition(
+                    connection_id=connection_id,
+                    project_id=project_id,
+                    issue_id=issue_db_id,
+                    redmine_issue_id=redmine_issue_id,
+                    from_status_id=from_status_id,
+                    to_status_id=to_status_id,
+                    changed_on=changed_on,
+                )
+            )
+
+    return transitions
+
+
+def should_refresh_transition_history(
+    *,
+    previous_updated_on: datetime | None,
+    remote_updated_on: datetime | None,
+    reopen_window_start: datetime,
+) -> bool:
+    if remote_updated_on is None:
+        return False
+    if remote_updated_on < reopen_window_start:
+        return False
+    if previous_updated_on is None:
+        return True
+    return previous_updated_on != remote_updated_on
 
 
 async def write_sync_log(
@@ -235,11 +295,17 @@ async def perform_issue_sync():
             )
 
         api_key = decrypt_secret(connection.encrypted_api_key)
+        health_config = await get_health_config(session)
+        thresholds = health_config.metric_thresholds_json or {}
+        reopen_window_days = int(thresholds.get("reopen_window_days") or 15)
+        reopen_window_start = datetime.now(timezone.utc) - timedelta(days=reopen_window_days)
         synced_at = datetime.now(timezone.utc)
         total_synced = 0
         created_count = 0
         updated_count = 0
+        deleted_count = 0
         offset = 0
+        seen_redmine_issue_ids: set[int] = set()
 
         try:
             while True:
@@ -276,6 +342,7 @@ async def perform_issue_sync():
                 current_offset = int(payload.get("offset") or offset)
 
                 for item in items:
+                    seen_redmine_issue_ids.add(int(item["id"]))
                     tracker_id, tracker_name = extract_named_entity(item.get("tracker"))
                     status_id, status_name = extract_named_entity(item.get("status"))
                     priority_id, priority_name = extract_named_entity(item.get("priority"))
@@ -289,6 +356,8 @@ async def perform_issue_sync():
                         )
                     )
                     issue = result.scalar_one_or_none()
+                    previous_updated_on = issue.redmine_updated_on if issue is not None else None
+                    remote_updated_on = parse_optional_datetime(item.get("updated_on"))
 
                     if issue is None:
                         issue = Issue(
@@ -314,7 +383,7 @@ async def perform_issue_sync():
                             spent_hours=item.get("spent_hours"),
                             is_closed=derive_is_closed(item),
                             redmine_created_on=parse_optional_datetime(item.get("created_on")),
-                            redmine_updated_on=parse_optional_datetime(item.get("updated_on")),
+                            redmine_updated_on=remote_updated_on,
                             raw_data_json=item,
                             last_synced_at=synced_at,
                         )
@@ -341,15 +410,104 @@ async def perform_issue_sync():
                         issue.spent_hours = item.get("spent_hours")
                         issue.is_closed = derive_is_closed(item)
                         issue.redmine_created_on = parse_optional_datetime(item.get("created_on"))
-                        issue.redmine_updated_on = parse_optional_datetime(item.get("updated_on"))
+                        issue.redmine_updated_on = remote_updated_on
                         issue.raw_data_json = item
                         issue.last_synced_at = synced_at
                         updated_count += 1
+
+                    await session.flush()
+
+                    if should_refresh_transition_history(
+                        previous_updated_on=previous_updated_on,
+                        remote_updated_on=remote_updated_on,
+                        reopen_window_start=reopen_window_start,
+                    ):
+                        detail_response = await fetch_redmine_issue_detail(
+                            connection.base_url,
+                            api_key,
+                            item["id"],
+                            include="journals",
+                        )
+                        if detail_response.status_code == 200:
+                            await session.execute(
+                                delete(IssueStatusTransition).where(
+                                    IssueStatusTransition.connection_id == connection.id,
+                                    IssueStatusTransition.redmine_issue_id == item["id"],
+                                )
+                            )
+                            detail_payload = detail_response.json()
+                            transitions = extract_status_transitions(
+                                detail_payload,
+                                issue.id,
+                                connection.id,
+                                project.id,
+                            )
+                            if transitions:
+                                session.add_all(transitions)
 
                 total_synced += len(items)
                 if total_synced >= total_count or not items:
                     break
                 offset = current_offset + current_limit
+
+            local_issue_query = select(Issue.id, Issue.redmine_issue_id).where(
+                Issue.connection_id == connection.id,
+                Issue.project_id == project.id,
+            )
+            local_issue_result = await session.execute(local_issue_query)
+            local_issue_rows = local_issue_result.all()
+            stale_local_issue_ids = [
+                issue_id
+                for issue_id, redmine_issue_id in local_issue_rows
+                if redmine_issue_id not in seen_redmine_issue_ids
+            ]
+            stale_redmine_issue_ids = [
+                redmine_issue_id
+                for _, redmine_issue_id in local_issue_rows
+                if redmine_issue_id not in seen_redmine_issue_ids
+            ]
+
+            if stale_redmine_issue_ids:
+                await session.execute(
+                    delete(IssueStatusTransition).where(
+                        IssueStatusTransition.connection_id == connection.id,
+                        IssueStatusTransition.project_id == project.id,
+                        or_(
+                            IssueStatusTransition.redmine_issue_id.in_(stale_redmine_issue_ids),
+                            IssueStatusTransition.issue_id.in_(stale_local_issue_ids) if stale_local_issue_ids else False,
+                        ),
+                    )
+                )
+            if stale_local_issue_ids:
+                await session.execute(
+                    delete(Issue).where(
+                        Issue.id.in_(stale_local_issue_ids),
+                    )
+                )
+                deleted_count = len(stale_local_issue_ids)
+
+            remaining_issue_id_result = await session.execute(
+                select(Issue.id).where(
+                    Issue.connection_id == connection.id,
+                    Issue.project_id == project.id,
+                )
+            )
+            remaining_issue_ids = [row[0] for row in remaining_issue_id_result.all()]
+            if remaining_issue_ids:
+                await session.execute(
+                    delete(IssueStatusTransition).where(
+                        IssueStatusTransition.connection_id == connection.id,
+                        IssueStatusTransition.project_id == project.id,
+                        ~IssueStatusTransition.issue_id.in_(remaining_issue_ids),
+                    )
+                )
+            else:
+                await session.execute(
+                    delete(IssueStatusTransition).where(
+                        IssueStatusTransition.connection_id == connection.id,
+                        IssueStatusTransition.project_id == project.id,
+                    )
+                )
         except httpx.TimeoutException:
             await session.rollback()
             await write_sync_log(
@@ -407,6 +565,7 @@ async def perform_issue_sync():
         "total_synced": total_synced,
         "created": created_count,
         "updated": updated_count,
+        "deleted": deleted_count,
         "synced_at": synced_at,
     }
 
@@ -444,15 +603,12 @@ async def list_issues(
         )
         health_config = await get_health_config(session)
         today = datetime.now(timezone.utc).date()
-        stale_days = int((health_config.metric_thresholds_json or {}).get("stale_days") or 7)
-        effort_yellow_max = float(
-            ((health_config.metric_thresholds_json or {}).get("effort_ratio") or {}).get("yellow_max") or 120.0
-        )
-        bug_tracker_names = {
-            item.strip().lower()
-            for item in (health_config.bug_tracker_names_json or [])
-            if item and item.strip()
-        }
+        thresholds = health_config.metric_thresholds_json or {}
+        aging_warning_days = int(thresholds.get("aging_warning_days") or 7)
+        overload_warning_hours = float(thresholds.get("overload_warning_hours") or 160)
+        overload_warning_share_pct = float(thresholds.get("overload_warning_share_pct") or 30)
+        reopen_window_days = int(thresholds.get("reopen_window_days") or 15)
+        closed_status_ids = set(health_config.closed_status_ids_json or settings.closed_status_ids)
 
         if status_id is not None:
             stmt = stmt.where(Issue.status_id == status_id)
@@ -478,33 +634,69 @@ async def list_issues(
             stmt = stmt.where(Issue.due_date >= due_date_from)
         if due_date_to is not None:
             stmt = stmt.where(Issue.due_date <= due_date_to)
-        if risk_type == "overdue":
+        if risk_type == "aging":
+            cutoff = datetime.combine(today - date.resolution * aging_warning_days, datetime.min.time())
             stmt = stmt.where(
-                Issue.is_closed.is_(False),
+                open_issue_clause(closed_status_ids),
+                Issue.redmine_created_on.is_not(None),
+                Issue.redmine_created_on < cutoff,
+            )
+        elif risk_type == "overload":
+            stmt = stmt.where(open_issue_clause(closed_status_ids))
+            if assignee_name:
+                stmt = stmt.where(Issue.assignee_name == assignee_name)
+            else:
+                open_issues_result = await session.execute(
+                    select(Issue).where(
+                        Issue.connection_id == connection.id,
+                        Issue.project_id == project.id,
+                        open_issue_clause(closed_status_ids),
+                    )
+                )
+                open_issues = open_issues_result.scalars().all()
+                total_workload = sum(float(item.estimated_hours or 0) for item in open_issues)
+                workload_by_assignee: dict[str, float] = {}
+                for item in open_issues:
+                    key = item.assignee_name or "Unassigned"
+                    workload_by_assignee[key] = workload_by_assignee.get(key, 0.0) + float(item.estimated_hours or 0)
+                flagged_assignees: list[str] = []
+                include_unassigned = False
+                for key, hours in workload_by_assignee.items():
+                    share = 0.0 if total_workload <= 0 else (hours / total_workload) * 100.0
+                    if hours >= overload_warning_hours or share >= overload_warning_share_pct:
+                        if key == "Unassigned":
+                            include_unassigned = True
+                        else:
+                            flagged_assignees.append(key)
+                clauses = []
+                if flagged_assignees:
+                    clauses.append(Issue.assignee_name.in_(sorted(set(flagged_assignees))))
+                if include_unassigned:
+                    clauses.append(Issue.assignee_name.is_(None))
+                if clauses:
+                    stmt = stmt.where(or_(*clauses))
+        elif risk_type == "reopen":
+            window_start = datetime.combine(today - date.resolution * reopen_window_days, datetime.min.time(), tzinfo=timezone.utc)
+            transition_result = await session.execute(
+                select(IssueStatusTransition.redmine_issue_id).where(
+                    IssueStatusTransition.connection_id == connection.id,
+                    IssueStatusTransition.project_id == project.id,
+                    IssueStatusTransition.changed_on >= window_start,
+                    IssueStatusTransition.from_status_id.in_(closed_status_ids),
+                    ~IssueStatusTransition.to_status_id.in_(closed_status_ids),
+                )
+            )
+            reopened_ids = sorted({row[0] for row in transition_result.all()})
+            if reopened_ids:
+                stmt = stmt.where(Issue.redmine_issue_id.in_(reopened_ids))
+            else:
+                stmt = stmt.where(Issue.redmine_issue_id == -1)
+        elif risk_type == "overdue":
+            stmt = stmt.where(
+                open_issue_clause(closed_status_ids),
                 Issue.due_date.is_not(None),
                 Issue.due_date < today,
             )
-        elif risk_type == "bug":
-            stmt = stmt.where(
-                Issue.is_closed.is_(False),
-                func.lower(Issue.tracker_name).in_(bug_tracker_names),
-            )
-        elif risk_type == "effort":
-            stmt = stmt.where(
-                Issue.estimated_hours.is_not(None),
-                Issue.estimated_hours > 0,
-                Issue.spent_hours.is_not(None),
-                ((Issue.spent_hours * 100.0) / Issue.estimated_hours) > effort_yellow_max,
-            )
-        elif risk_type == "stale":
-            stale_cutoff = today - date.resolution * stale_days
-            stmt = stmt.where(
-                Issue.is_closed.is_(False),
-                Issue.redmine_updated_on.is_not(None),
-                Issue.redmine_updated_on < datetime.combine(stale_cutoff, datetime.min.time()),
-            )
-        elif risk_type == "progress":
-            stmt = stmt.where(Issue.is_closed.is_(False))
 
         count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
         total = await session.scalar(count_stmt)

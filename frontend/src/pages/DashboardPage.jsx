@@ -77,11 +77,14 @@ export default function DashboardPage({ user, onLogout }) {
               Settings
             </button>
           ) : null}
+          <button className="nav-link" type="button" onClick={handleLogout}>
+            Logout
+          </button>
         </nav>
       </aside>
 
       <main className="main">
-        <header className="topbar">
+        {/* <header className="topbar">
           <div>
             <h1>
               {showSettings
@@ -100,7 +103,7 @@ export default function DashboardPage({ user, onLogout }) {
           <button className="secondary" onClick={handleLogout}>
             Logout
           </button>
-        </header>
+        </header> */}
 
         {showSettings ? (
           <section className="settings-stack">
@@ -140,7 +143,7 @@ export default function DashboardPage({ user, onLogout }) {
         ) : showIssues ? (
           <IssuesPage initialPreset={issuePreset} onClearPreset={() => setIssuePreset(null)} />
         ) : (
-          <DashboardSummaryPage dbStatus={dbStatus} onOpenIssues={openIssuesWithPreset} />
+          <DashboardSummaryPage onOpenIssues={openIssuesWithPreset} />
         )}
       </main>
     </div>

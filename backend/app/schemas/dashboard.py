@@ -17,21 +17,17 @@ class DashboardDateRange(BaseModel):
 
 
 class DashboardHealthSummary(BaseModel):
-    score: float
-    max_score: int
     status: str
+    score_label: str | None
     trend_value: float | None
     trend_direction: str
 
 
-class DashboardMetricItem(BaseModel):
+class DashboardKpiItem(BaseModel):
     code: str
     label: str
-    score: int
-    max_score: int
-    value: float | None
-    value_display: str
-    benchmark: str
+    status: str
+    summary: str
     drilldown_risk_type: str | None
     details: dict[str, Any]
 
@@ -56,11 +52,10 @@ class DashboardSuggestedActionItem(BaseModel):
     drilldown_value: str | None = None
 
 
-class DashboardEarlyWarningItem(BaseModel):
+class DashboardWarningItem(BaseModel):
     code: str
     level: str
     message: str
-    drilldown_risk_type: str | None = None
 
 
 class DashboardHealthTrendItem(BaseModel):
@@ -81,8 +76,8 @@ class DashboardSummaryResponse(BaseModel):
     closed_issues: int
     overdue_issues: int
     health_summary: DashboardHealthSummary
-    metrics: list[DashboardMetricItem]
+    kpi_cards: list[DashboardKpiItem]
     main_risk_drivers: list[DashboardRiskDriverItem]
     suggested_actions: list[DashboardSuggestedActionItem]
-    early_warnings: list[DashboardEarlyWarningItem]
+    data_quality_warnings: list[DashboardWarningItem]
     health_trend: list[DashboardHealthTrendItem]

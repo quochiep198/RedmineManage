@@ -19,35 +19,12 @@ function buildParams(filters) {
   return params;
 }
 
-function MetricCard({ label, value }) {
-  return (
-    <div className="stat-card">
-      <p>{label}</p>
-      <h3>{value}</h3>
-    </div>
-  );
-}
-
 function HealthBadge({ value }) {
   return <span className={`health-badge ${String(value || "").toLowerCase()}`}>{value}</span>;
 }
 
-function trendLabel(direction, value) {
-  if (value == null) {
-    return "No previous snapshot";
-  }
-  const prefix = value > 0 ? "+" : "";
-  if (direction === "up") {
-    return `${prefix}${value} up`;
-  }
-  if (direction === "down") {
-    return `${value} down`;
-  }
-  return `${value} flat`;
-}
-
-function warningTag(level) {
-  return <span className={`warning-tag ${String(level || "").toLowerCase()}`}>{level}</span>;
+function KpiStatusTag({ value }) {
+  return <span className={`warning-tag ${String(value || "").toLowerCase()}`}>{value}</span>;
 }
 
 function DrilldownButton({ item, onOpenIssues }) {
@@ -75,7 +52,53 @@ function DrilldownButton({ item, onOpenIssues }) {
   );
 }
 
-export default function DashboardSummaryPage({ dbStatus, onOpenIssues }) {
+function formatDateTime(value) {
+  if (!value) {
+    return "N/A";
+  }
+  return new Date(value).toLocaleString();
+}
+
+function trendBarClass(status) {
+  return `trend-bar ${String(status || "").toLowerCase()}`;
+}
+
+function TrendChart({ items }) {
+  if (!items?.length) {
+    return <p className="muted-copy">No trend data yet.</p>;
+  }
+
+  return (
+    <div className="trend-chart-wrap">
+      <div className="trend-bar-chart" role="img" aria-label="Health trend bar chart">
+        {items.map((item) => {
+          const score = Number(item.score || 0);
+          const barHeight = Math.max(10, Math.min(100, (score / 6) * 100));
+          return (
+            <div className="trend-bar-col" key={`${item.label}-${item.snapshot_at}`}>
+              <div className="trend-bar-track">
+                <div className="trend-bar-hitbox">
+                  <div
+                    className={trendBarClass(item.status)}
+                    style={{ height: `${barHeight}%` }}
+                  />
+                  <div className="trend-bar-tooltip">
+                    <strong>{item.label}</strong>
+                    <span>Score: {score} / 6</span>
+                    <span>Status: {item.status}</span>
+                  </div>
+                </div>
+              </div>
+              <span className="trend-bar-label">{item.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardSummaryPage({ onOpenIssues }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [draftFilters, setDraftFilters] = useState(emptyFilters);
   const [data, setData] = useState(null);
@@ -123,7 +146,7 @@ export default function DashboardSummaryPage({ dbStatus, onOpenIssues }) {
         timeout: LONG_RUNNING_REQUEST_TIMEOUT_MS,
       });
       setSuccess(
-        `Synced ${res.data.total_synced} issues (${res.data.created} created, ${res.data.updated} updated).`,
+        `Synced ${res.data.total_synced} issues (${res.data.created} created, ${res.data.updated} updated, ${res.data.deleted} deleted).`,
       );
       setRefreshKey((current) => current + 1);
     } catch (err) {
@@ -142,10 +165,8 @@ export default function DashboardSummaryPage({ dbStatus, onOpenIssues }) {
       <section className="panel dashboard-filter-panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Current Project</p>
             <h2>{data?.project?.name ?? "Not synced yet"}</h2>
           </div>
-          <span className="dashboard-db-status">DB: {dbStatus}</span>
         </div>
 
         <div className="dashboard-filter-grid">
@@ -167,11 +188,11 @@ export default function DashboardSummaryPage({ dbStatus, onOpenIssues }) {
         </div>
 
         <div className="connection-actions">
-          <button className="primary-action" type="button" onClick={applyFilters}>
-            Apply
+          <button className="primary-action" type="button" onClick={syncIssues} disabled={syncing}>
+            {syncing ? "Syncing..." : "Sync"}
           </button>
-          <button className="secondary" type="button" onClick={syncIssues} disabled={syncing}>
-            {syncing ? "Syncing..." : "Sync Issues"}
+          <button className="secondary" type="button" onClick={applyFilters}>
+            Apply
           </button>
         </div>
       </section>
@@ -186,66 +207,73 @@ export default function DashboardSummaryPage({ dbStatus, onOpenIssues }) {
       ) : (
         <>
           <section className="grid">
-            <MetricCard label="Total Issues" value={data?.total_issues ?? 0} />
-            <MetricCard label="Open Issues" value={data?.open_issues ?? 0} />
-            <MetricCard label="Closed Issues" value={data?.closed_issues ?? 0} />
-            <MetricCard label="Overdue Issues" value={data?.overdue_issues ?? 0} />
+            <div className="stat-card">
+              <p>Total Issues</p>
+              <h3>{data?.total_issues ?? 0}</h3>
+            </div>
+            <div className="stat-card">
+              <p>Open Issues</p>
+              <h3>{data?.open_issues ?? 0}</h3>
+            </div>
+            <div className="stat-card">
+              <p>Closed Issues</p>
+              <h3>{data?.closed_issues ?? 0}</h3>
+            </div>
+            <div className="stat-card">
+              <p>Last Updated</p>
+              <h3 className="stat-card-datetime">{formatDateTime(data?.last_updated)}</h3>
+            </div>
           </section>
 
           <section className="panel dashboard-health-panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Project Health</p>
-                <h2>Current Health</h2>
+                <p className="eyebrow">Project Health Analyzer</p>
+                <h2>KPI Dashboard</h2>
               </div>
               <HealthBadge value={data?.health_summary?.status ?? "Red"} />
             </div>
 
-            <div className="dashboard-health-grid health-summary-grid">
+            {/* <div className="dashboard-health-grid health-summary-grid">
               <div className="dashboard-health-stat">
-                <span>Score</span>
-                <strong>
-                  {data?.health_summary?.score ?? 0} / {data?.health_summary?.max_score ?? 12}
-                </strong>
+                <span>Project Health</span>
+                <strong>{data?.health_summary?.status ?? "Red"}</strong>
               </div>
               <div className="dashboard-health-stat">
-                <span>Trend</span>
-                <strong>
-                  {trendLabel(data?.health_summary?.trend_direction, data?.health_summary?.trend_value)}
-                </strong>
+                <span>Reference Score</span>
+                <strong>{data?.health_summary?.score_label || "N/A"}</strong>
               </div>
-              <div className="dashboard-health-stat">
-                <span>Last Updated</span>
-                <strong>{data?.last_updated ? new Date(data.last_updated).toLocaleString() : "N/A"}</strong>
-              </div>
+            </div> */}
+
+            <div className="dashboard-warning-list">
+              <h3>Trend</h3>
+              <TrendChart items={data?.health_trend || []} />
             </div>
 
             <div className="metric-breakdown">
               <div className="section-heading compact">
                 <div>
-                  <p className="eyebrow">Metrics</p>
-                  <h3>Score Breakdown</h3>
+                  <p className="eyebrow">KPI Insights</p>
+                  <h3>Core Indicators</h3>
                 </div>
               </div>
               <div className="metric-list">
-                {(data?.metrics || []).map((metric) => (
-                  <div className="metric-row" key={metric.code}>
+                {(data?.kpi_cards || []).map((item) => (
+                  <div className="metric-row" key={item.code}>
                     <div>
-                      <strong>{metric.label}</strong>
-                      <p>{metric.value_display}</p>
+                      <strong>{item.label}</strong>
+                      <p>{item.summary}</p>
                     </div>
                     <div className="metric-actions">
-                      <span className="metric-score">
-                        {metric.score}/{metric.max_score}
-                      </span>
-                      {metric.drilldown_risk_type ? (
+                      <KpiStatusTag value={item.status} />
+                      {item.drilldown_risk_type ? (
                         <button
                           className="link-button"
                           type="button"
                           onClick={() =>
                             onOpenIssues({
-                              title: metric.label,
-                              filters: { risk_type: metric.drilldown_risk_type },
+                              title: item.label,
+                              filters: { risk_type: item.drilldown_risk_type },
                             })
                           }
                         >
@@ -294,68 +322,21 @@ export default function DashboardSummaryPage({ dbStatus, onOpenIssues }) {
             </div>
 
             <div className="dashboard-warning-list">
-              <h3>Early Warnings</h3>
-              {data?.early_warnings?.length ? (
-                data.early_warnings.map((item) => (
+              <h3>Data Quality Warnings</h3>
+              {data?.data_quality_warnings?.length ? (
+                data.data_quality_warnings.map((item) => (
                   <div className="dashboard-warning-item" key={item.code}>
                     <div>
                       <strong>{item.message}</strong>
                       <p>{item.code}</p>
                     </div>
-                    <div className="metric-actions">
-                      {warningTag(item.level)}
-                      {item.drilldown_risk_type ? (
-                        <button
-                          className="link-button"
-                          type="button"
-                          onClick={() =>
-                            onOpenIssues({
-                              title: item.message,
-                              filters: { risk_type: item.drilldown_risk_type },
-                            })
-                          }
-                        >
-                          View issues
-                        </button>
-                      ) : null}
-                    </div>
+                    <KpiStatusTag value={item.level} />
                   </div>
                 ))
               ) : (
                 <p className="muted-copy">No active warnings.</p>
               )}
             </div>
-          </section>
-
-          <section className="panel dashboard-chart-panel">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Health Trend</p>
-                <h2>Score History</h2>
-              </div>
-            </div>
-            {data?.health_trend?.length ? (
-              <div className="trend-list">
-                {data.health_trend.map((item) => (
-                  <div className="trend-row" key={`${item.label}-${item.snapshot_at}`}>
-                    <div className="trend-meta">
-                      <strong>{item.label}</strong>
-                      <span>
-                        {item.score}/12 • {item.status} • {trendLabel(item.trend_direction, item.trend_value)}
-                      </span>
-                    </div>
-                    <div className="distribution-track">
-                      <div
-                        className="distribution-bar"
-                        style={{ width: `${Math.max(8, Math.round((item.score / 12) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="muted-copy">No previous snapshot.</p>
-            )}
           </section>
         </>
       )}
